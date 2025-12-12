@@ -64,7 +64,7 @@ const loginWithGitHub = async (): Promise<void> => {
   error.value = null
 
   try {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin
     const redirectUri = `${window.location.origin}/auth/callback`
     window.location.href = `${apiBaseUrl}/api/v1/auth/github?redirect_uri=${encodeURIComponent(redirectUri)}`
   } catch (err) {
@@ -78,7 +78,7 @@ const loginWithGitLab = async (): Promise<void> => {
   error.value = null
 
   try {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin
     const redirectUri = `${window.location.origin}/auth/callback`
     window.location.href = `${apiBaseUrl}/api/v1/auth/gitlab?redirect_uri=${encodeURIComponent(redirectUri)}`
   } catch (err) {
