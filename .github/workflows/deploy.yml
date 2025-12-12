@@ -1,0 +1,82 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY_SERVER: sherlock-service/server
+  ECR_REPOSITORY_WORKER: sherlock-service/worker
+  ECS_CLUSTER: sherlock-cluster
+  ECS_SERVICE_SERVER: sherlock-server
+  ECS_SERVICE_WORKER: sherlock-worker
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push server image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:latest
+
+      - name: Build and push worker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f docker/Dockerfile.worker -t $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest
+
+      - name: Update ECS service (server)
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE_SERVER }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Update ECS service (worker)
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE_WORKER }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for deployment to complete
+        run: |
+          echo "Waiting for server deployment..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE_SERVER }} \
+            --region ${{ env.AWS_REGION }}
+
+          echo "Waiting for worker deployment..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE_WORKER }} \
+            --region ${{ env.AWS_REGION }}
