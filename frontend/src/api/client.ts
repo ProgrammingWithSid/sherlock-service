@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 class APIClient {
   private client: AxiosInstance
