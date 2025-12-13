@@ -204,3 +204,25 @@ func (db *DB) ListAllOrganizations() ([]*types.Organization, error) {
 
 	return orgs, nil
 }
+
+// GetOrganizationsByUserID returns organizations for a specific user
+// If user has org_id, returns that organization
+// If user is super admin, returns all organizations
+func (db *DB) GetOrganizationsByUserID(userID string, userRole string, userOrgID *string) ([]*types.Organization, error) {
+	// Super admins can see all organizations
+	if userRole == string(types.RoleSuperAdmin) {
+		return db.ListAllOrganizations()
+	}
+
+	// Regular users only see their own organization
+	if userOrgID == nil {
+		return []*types.Organization{}, nil
+	}
+
+	org, err := db.GetOrganizationByID(*userOrgID)
+	if err != nil {
+		return []*types.Organization{}, nil // Return empty if not found
+	}
+
+	return []*types.Organization{org}, nil
+}

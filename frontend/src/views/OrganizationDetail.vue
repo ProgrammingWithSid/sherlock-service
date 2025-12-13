@@ -196,7 +196,7 @@ const viewRepositories = () => {
 
 onMounted(async () => {
   const orgId = route.params.id as string
-  
+
   try {
     const [orgData, usersData] = await Promise.all([
       adminAPI.getOrganization(orgId),
@@ -205,7 +205,7 @@ onMounted(async () => {
 
     organization.value = orgData.organization
     stats.value = orgData.stats || {}
-    
+
     // Filter users by organization
     users.value = usersData.filter((u: any) => u.org_id === orgId)
   } catch (err: any) {
@@ -216,4 +216,3 @@ onMounted(async () => {
   }
 })
 </script>
-

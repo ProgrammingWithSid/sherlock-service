@@ -517,10 +517,43 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, response)
 }
 
-// ListOrganizations returns all organizations accessible by the current user
-// For now, this returns all organizations that have installations (connected accounts)
+// ListOrganizations returns organizations accessible by the current user
+// Super admins see all organizations, regular users only see their own organization
 func (h *AuthHandler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
-	orgs, err := h.db.ListAllOrganizations()
+	// Get user info from session (set by RequireAuth middleware if authenticated)
+	// If not authenticated, try to get from session token
+	token := getSessionToken(r)
+	var userID, userRole string
+	var userOrgID *string
+
+	if token != "" {
+		if session, ok := sessionStore.Get(token); ok {
+			userID = session.UserID
+			userRole = session.Role
+			userOrgID = session.OrgID
+		}
+	}
+
+	// If no session, try to get from context (set by middleware)
+	if userID == "" {
+		if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+			userID = ctxUserID
+		}
+		if ctxRole, ok := r.Context().Value("user_role").(string); ok {
+			userRole = ctxRole
+		}
+		if ctxOrgID, ok := r.Context().Value("org_id").(string); ok {
+			userOrgID = &ctxOrgID
+		}
+	}
+
+	// If still no user info, return empty list (or could require auth)
+	if userID == "" {
+		render.JSON(w, r, []*types.Organization{})
+		return
+	}
+
+	orgs, err := h.db.GetOrganizationsByUserID(userID, userRole, userOrgID)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": err.Error()})
