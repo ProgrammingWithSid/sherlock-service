@@ -144,3 +144,4 @@ func (s *GitLabCommentService) createReviewBody(result *types.ReviewResult) stri
 	return strings.Join(parts, "\n")
 }
 
+

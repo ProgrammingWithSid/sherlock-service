@@ -14,3 +14,4 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Note: Tables will be created automatically by the application migrations
 -- when you start the server. This script just sets up the database.
 
+

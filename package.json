@@ -1,0 +1,48 @@
+{
+  "name": "sherlock-service",
+  "version": "1.0.0",
+  "description": "Sherlock AI Code Review Service - Monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend/cmd/server && go run main.go",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && go build -o ../bin/server ./cmd/server",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && go test ./...",
+    "test:frontend": "cd frontend && npm run test",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && golangci-lint run",
+    "lint:frontend": "cd frontend && npm run lint",
+    "clean": "rm -rf bin/ backend/bin/ frontend/dist frontend/node_modules",
+    "install:all": "npm install && cd frontend && npm install",
+    "docker:build": "docker-compose -f docker/docker-compose.yml build",
+    "docker:up": "docker-compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "keywords": [
+    "code-review",
+    "ai",
+    "monorepo",
+    "golang",
+    "vue"
+  ],
+  "author": "",
+  "license": "MIT"
+}

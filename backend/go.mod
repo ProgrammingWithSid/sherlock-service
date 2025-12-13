@@ -1,8 +1,6 @@
 module github.com/sherlock/service
 
-go 1.24.0
-
-toolchain go1.24.11
+go 1.23
 
 require (
 	github.com/go-chi/chi/v5 v5.0.11
@@ -17,7 +15,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/rs/zerolog v1.31.0
 	github.com/xanzy/go-gitlab v0.115.0
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.19.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

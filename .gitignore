@@ -24,6 +24,10 @@ go.work
 .env.local
 .env.*.local
 
+# Frontend environment files (keep .env.example and .env.production)
+frontend/.env.local
+frontend/.env*.local
+
 # IDE
 .idea/
 .vscode/
@@ -56,5 +60,33 @@ repos/
 build/
 out/
 
+# Frontend (Node.js)
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.output/
+*.local
 
-*.md
+# NPM
+package-lock.json
+frontend/package-lock.json
+.npm
+.eslintcache
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Monorepo
+.pnpm-store/
+.yarn/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*

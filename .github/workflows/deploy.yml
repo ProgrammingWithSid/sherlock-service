@@ -80,3 +80,4 @@ jobs:
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE_WORKER }} \
             --region ${{ env.AWS_REGION }}
+

@@ -178,3 +178,4 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult) stri
 	return strings.Join(parts, "\n")
 }
 
+
