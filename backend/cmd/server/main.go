@@ -146,8 +146,13 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 	// Serve static files (frontend)
 	// Check if frontend/dist exists
 	if _, err := os.Stat("./frontend/dist"); err == nil {
-		// Serve static assets
-		r.Handle("/assets/*", http.StripPrefix("/assets", http.FileServer(http.Dir("./frontend/dist/assets"))))
+		// Serve static assets with long cache headers (they're hashed)
+		assetsHandler := http.StripPrefix("/assets", http.FileServer(http.Dir("./frontend/dist/assets")))
+		r.Handle("/assets/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Cache hashed assets for 1 year
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			assetsHandler.ServeHTTP(w, r)
+		}))
 
 		// Handle SPA routing - serve index.html for all non-API routes
 		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
@@ -159,6 +164,10 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 				http.NotFound(w, req)
 				return
 			}
+			// Prevent caching of index.html to ensure users get latest version
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
 			http.ServeFile(w, req, "./frontend/dist/index.html")
 		})
 	}
