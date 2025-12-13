@@ -278,9 +278,24 @@ func (h *AuthHandler) GitLabCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get or create user
+	dbUser, err := h.db.GetUserByEmail(user.Email)
+	if err != nil {
+		// User doesn't exist, create one
+		// Use a random password since OAuth users don't need passwords
+		randomPassword := generateSessionToken() // Use session token generator for random string
+		dbUser, err = h.db.CreateUser(user.Email, randomPassword, user.Name, types.RoleOrgAdmin, &org.ID)
+		if err != nil {
+			log.Error().Err(err).Str("email", user.Email).Msg("Failed to create user")
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, map[string]string{"error": "Failed to create user"})
+			return
+		}
+	}
+
 	// Create session token
 	sessionToken := generateSessionToken()
-	sessionStore.Set(sessionToken, user.ID, string(user.Role), &org.ID)
+	sessionStore.Set(sessionToken, dbUser.ID, string(dbUser.Role), &org.ID)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
