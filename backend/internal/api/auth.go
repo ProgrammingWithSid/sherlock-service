@@ -274,6 +274,7 @@ func (h *AuthHandler) GitLabCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Create session token
 	sessionToken := generateSessionToken()
+	sessionStore.Set(sessionToken, user.ID, string(user.Role), &org.ID)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",

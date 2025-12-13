@@ -43,6 +43,9 @@ func main() {
 	workerPool := workers.NewWorkerPool(reviewQueue, db, cfg)
 	go workerPool.Start(context.Background())
 
+	// Initialize session store
+	api.InitSessionStore(db)
+
 	// Initialize API router
 	router := setupRouter(cfg, db, reviewQueue)
 

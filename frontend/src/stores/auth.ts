@@ -49,11 +49,21 @@ export const useAuthStore = defineStore('auth', {
         if (user.org_id) {
           this.orgId = user.org_id
           localStorage.setItem('org_id', user.org_id)
+        } else {
+          // Clear orgId if user doesn't have one (e.g., super admin)
+          this.orgId = null
+          localStorage.removeItem('org_id')
         }
         this.isAuthenticated = true
+        // Update token in state if returned
+        if (user.token) {
+          this.token = user.token
+          localStorage.setItem('session_token', user.token)
+        }
       } catch (err) {
         this.error = err instanceof Error ? err.message : 'Failed to fetch user'
-        this.logout()
+        // Don't logout here - let the caller decide
+        throw err
       } finally {
         this.loading = false
       }
@@ -63,9 +73,22 @@ export const useAuthStore = defineStore('auth', {
       const token = localStorage.getItem('session_token')
       const orgId = localStorage.getItem('org_id')
 
-      if (token && orgId) {
-        await this.setAuth(token, orgId)
-        await this.fetchCurrentUser()
+      if (token) {
+        // Set auth state first (orgId might be null for super admins)
+        this.token = token
+        this.isAuthenticated = true
+        if (orgId) {
+          this.orgId = orgId
+        }
+        
+        // Try to fetch current user to validate session
+        try {
+          await this.fetchCurrentUser()
+        } catch (err) {
+          // If fetch fails, session might be expired - clear auth but don't throw
+          console.warn('Session validation failed:', err)
+          this.logout()
+        }
       }
     },
 

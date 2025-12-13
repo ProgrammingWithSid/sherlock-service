@@ -103,6 +103,16 @@ func (db *DB) migrate() error {
 			created_at TIMESTAMP DEFAULT NOW(),
 			updated_at TIMESTAMP DEFAULT NOW()
 		)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			token VARCHAR(255) PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			role VARCHAR(50) NOT NULL,
+			org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+			expires_at TIMESTAMP NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_org ON github_installations(org_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_id ON github_installations(installation_id)`,
 		`CREATE TABLE IF NOT EXISTS users (

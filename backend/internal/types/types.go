@@ -209,3 +209,12 @@ type UsageLog struct {
 	Metadata  string    `json:"metadata" db:"metadata"` // JSON string
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
+
+// Session represents a user session
+type Session struct {
+	Token     string     `json:"token" db:"token"`
+	UserID    string     `json:"user_id" db:"user_id"`
+	Role      string     `json:"role" db:"role"`
+	OrgID     *string    `json:"org_id,omitempty" db:"org_id"`
+	ExpiresAt time.Time  `json:"expires_at" db:"expires_at"`
+}

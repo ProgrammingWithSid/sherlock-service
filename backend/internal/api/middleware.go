@@ -5,10 +5,16 @@ import (
 	"net/http"
 
 	"github.com/go-chi/render"
+	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/types"
 )
 
-var sessionStore = NewSessionStore()
+// sessionStore will be initialized in setupRouter
+var sessionStore *SessionStore
+
+func InitSessionStore(db *database.DB) {
+	sessionStore = NewSessionStore(db)
+}
 
 // RequireAuth middleware ensures user is authenticated
 func RequireAuth(next http.Handler) http.Handler {

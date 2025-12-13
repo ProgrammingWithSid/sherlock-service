@@ -6,7 +6,7 @@ export interface CurrentUser {
   name: string
   plan?: string
   role?: string
-  token: string
+  token?: string
 }
 
 export interface SignupRequest {
