@@ -173,3 +173,8 @@ func (db *DB) UpdateUserRole(userID string, role types.Role) error {
 	}
 	return nil
 }
+
+// ListAllUsers returns all users (for super admin)
+func (db *DB) ListAllUsers() ([]*types.User, error) {
+	return db.ListUsers(nil)
+}
