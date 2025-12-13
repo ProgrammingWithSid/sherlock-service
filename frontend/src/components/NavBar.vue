@@ -35,6 +35,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -49,10 +50,13 @@ interface NavItem {
   path: string
 }
 
-const navItems: NavItem[] = [
-  { name: 'Dashboard', path: '/' },
-  { name: 'Repositories', path: '/repositories' },
-  { name: 'Reviews', path: '/reviews' },
-  { name: 'Settings', path: '/settings' },
-]
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    { name: 'Dashboard', path: authStore.isSuperAdmin ? '/admin' : '/' },
+    { name: 'Repositories', path: '/repositories' },
+    { name: 'Reviews', path: '/reviews' },
+    { name: 'Settings', path: '/settings' },
+  ]
+  return items
+})
 </script>

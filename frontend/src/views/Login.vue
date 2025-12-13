@@ -10,13 +10,59 @@
         </p>
       </div>
 
-      <div class="mt-8 space-y-6">
+      <form class="mt-8 space-y-6" @submit.prevent="handleLogin">
         <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4">
           <p class="text-sm text-red-800">{{ error }}</p>
         </div>
 
         <div class="space-y-4">
+          <div>
+            <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+            <input
+              id="email"
+              v-model="form.email"
+              type="email"
+              required
+              class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+            <input
+              id="password"
+              v-model="form.password"
+              type="password"
+              required
+              class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="••••••••"
+            />
+          </div>
+        </div>
+
+        <div>
           <button
+            type="submit"
+            :disabled="loading"
+            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ loading ? 'Signing in...' : 'Sign in' }}
+          </button>
+        </div>
+
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-gray-300" />
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="px-2 bg-gray-50 text-gray-500">Or continue with</span>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <button
+            type="button"
             @click="loginWithGitHub"
             :disabled="loading"
             class="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -28,10 +74,11 @@
                 clip-rule="evenodd"
               />
             </svg>
-            {{ loading ? 'Connecting...' : 'Continue with GitHub' }}
+            Continue with GitHub
           </button>
 
           <button
+            type="button"
             @click="loginWithGitLab"
             :disabled="loading"
             class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -41,23 +88,83 @@
                 d="M18.384 8.729h-1.568V5.771c0-2.299-1.832-4.161-4.161-4.161H5.771c-2.299 0-4.161 1.832-4.161 4.161v1.568H.231a.231.231 0 00-.231.231v2.078a.231.231 0 00.231.231h1.379v1.568c0 2.299 1.832 4.161 4.161 4.161h6.884c2.299 0 4.161-1.832 4.161-4.161v-1.568h1.568a.231.231 0 00.231-.231V8.96a.231.231 0 00-.231-.231zM5.771 3.206h6.884c1.416 0 2.565 1.149 2.565 2.565v1.568H3.206V5.771c0-1.416 1.149-2.565 2.565-2.565zm8.449 11.588H5.771c-1.416 0-2.565-1.149-2.565-2.565V9.661h11.588v4.568c0 1.416-1.149 2.565-2.565 2.565z"
               />
             </svg>
-            {{ loading ? 'Connecting...' : 'Continue with GitLab' }}
+            Continue with GitLab
           </button>
         </div>
-      </div>
+
+        <div class="text-center">
+          <router-link
+            to="/signup"
+            class="text-sm text-blue-600 hover:text-blue-500"
+          >
+            Don't have an account? Sign up
+          </router-link>
+        </div>
+      </form>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { authAPI } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import { useOrganizationStore } from '@/stores/organization'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const orgStore = useOrganizationStore()
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+const form = ref({
+  email: '',
+  password: '',
+})
+
+const handleLogin = async (): Promise<void> => {
+  loading.value = true
+  error.value = null
+
+  try {
+    const response = await authAPI.login({
+      email: form.value.email,
+      password: form.value.password,
+    })
+
+    // Set auth
+    await authStore.setAuth(response.token, response.user.org_id || '')
+    authStore.user = {
+      org_id: response.user.org_id || '',
+      name: response.user.name,
+      plan: response.organization?.plan || 'free',
+    }
+
+    // Set organization if available
+    if (response.organization) {
+      orgStore.setOrganization({
+        id: response.organization.id,
+        name: response.organization.name,
+        slug: response.organization.slug,
+        plan: response.organization.plan,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    // Redirect based on role
+    if (response.user.role === 'super_admin') {
+      router.push('/admin')
+    } else {
+      router.push('/')
+    }
+  } catch (err: any) {
+    error.value = err.response?.data?.error || err.message || 'Failed to sign in'
+  } finally {
+    loading.value = false
+  }
+}
 
 const loginWithGitHub = async (): Promise<void> => {
   loading.value = true

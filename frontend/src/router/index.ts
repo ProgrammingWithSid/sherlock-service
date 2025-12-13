@@ -9,10 +9,22 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: '/signup',
+    name: 'signup',
+    component: () => import('@/views/Signup.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
     path: '/auth/callback',
     name: 'auth-callback',
     component: () => import('@/views/AuthCallback.vue'),
     meta: { requiresAuth: false },
+  },
+  {
+    path: '/admin',
+    name: 'admin-dashboard',
+    component: () => import('@/views/AdminDashboard.vue'),
+    meta: { requiresAuth: true, requiresSuperAdmin: true },
   },
   {
     path: '/',
@@ -64,11 +76,26 @@ router.beforeEach(async (to, from, next) => {
   // Check if route requires authentication
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } })
-  } else if (to.name === 'login' && authStore.isAuthenticated) {
-    next('/')
-  } else {
-    next()
+    return
   }
+
+  // Check if route requires super admin
+  if (to.meta.requiresSuperAdmin && !authStore.isSuperAdmin) {
+    next({ name: 'dashboard' })
+    return
+  }
+
+  // Redirect authenticated users away from login/signup
+  if ((to.name === 'login' || to.name === 'signup') && authStore.isAuthenticated) {
+    if (authStore.isSuperAdmin) {
+      next('/admin')
+    } else {
+      next('/')
+    }
+    return
+  }
+
+  next()
 })
 
 export default router

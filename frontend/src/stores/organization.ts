@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
+import { authAPI } from '@/api/auth'
 import type { Organization } from '@/types'
 
 interface OrganizationState {
   current: Organization | null
+  organizations: Organization[]
   loading: boolean
   error: string | null
 }
@@ -10,6 +12,7 @@ interface OrganizationState {
 export const useOrganizationStore = defineStore('organization', {
   state: (): OrganizationState => ({
     current: null,
+    organizations: [],
     loading: false,
     error: null,
   }),
@@ -32,6 +35,21 @@ export const useOrganizationStore = defineStore('organization', {
     setError(error: string | null): void {
       this.error = error
     },
+
+    async fetchOrganizations(): Promise<void> {
+      this.loading = true
+      this.error = null
+
+      try {
+        const orgs = await authAPI.listOrganizations()
+        this.organizations = orgs
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : 'Failed to fetch organizations'
+        console.error('Failed to fetch organizations:', err)
+      } finally {
+        this.loading = false
+      }
+    },
   },
 
   getters: {
@@ -52,5 +70,3 @@ export const useOrganizationStore = defineStore('organization', {
     },
   },
 })
-
-

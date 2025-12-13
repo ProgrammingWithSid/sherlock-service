@@ -129,3 +129,78 @@ func (db *DB) GetRepoCount(orgID string) (int, error) {
 
 	return count, nil
 }
+
+// ListOrganizationsByToken returns all organizations that have installations with the given token
+func (db *DB) ListOrganizationsByToken(token string) ([]*types.Organization, error) {
+	query := `
+		SELECT DISTINCT o.id, o.name, o.slug, o.plan, o.stripe_customer_id, o.stripe_subscription_id,
+		       o.plan_activated_at, o.created_at, o.updated_at
+		FROM organizations o
+		INNER JOIN github_installations gi ON o.id = gi.org_id
+		WHERE gi.token = $1
+		ORDER BY o.created_at DESC
+	`
+
+	rows, err := db.conn.Query(query, token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list organizations: %w", err)
+	}
+	defer rows.Close()
+
+	var orgs []*types.Organization
+	for rows.Next() {
+		org := &types.Organization{}
+		err := rows.Scan(
+			&org.ID, &org.Name, &org.Slug, &org.Plan,
+			&org.StripeCustomerID, &org.StripeSubscriptionID,
+			&org.PlanActivatedAt, &org.CreatedAt, &org.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan organization: %w", err)
+		}
+		orgs = append(orgs, org)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating organizations: %w", err)
+	}
+
+	return orgs, nil
+}
+
+// ListAllOrganizations returns all organizations that have installations (connected accounts)
+func (db *DB) ListAllOrganizations() ([]*types.Organization, error) {
+	query := `
+		SELECT DISTINCT o.id, o.name, o.slug, o.plan, o.stripe_customer_id, o.stripe_subscription_id,
+		       o.plan_activated_at, o.created_at, o.updated_at
+		FROM organizations o
+		INNER JOIN github_installations gi ON o.id = gi.org_id
+		ORDER BY o.created_at DESC
+	`
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list organizations: %w", err)
+	}
+	defer rows.Close()
+
+	var orgs []*types.Organization
+	for rows.Next() {
+		org := &types.Organization{}
+		err := rows.Scan(
+			&org.ID, &org.Name, &org.Slug, &org.Plan,
+			&org.StripeCustomerID, &org.StripeSubscriptionID,
+			&org.PlanActivatedAt, &org.CreatedAt, &org.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan organization: %w", err)
+		}
+		orgs = append(orgs, org)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating organizations: %w", err)
+	}
+
+	return orgs, nil
+}

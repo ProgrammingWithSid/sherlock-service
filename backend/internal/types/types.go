@@ -59,6 +59,27 @@ const (
 	PlanEnterprise Plan = "enterprise"
 )
 
+// Role represents user role
+type Role string
+
+const (
+	RoleSuperAdmin Role = "super_admin"
+	RoleOrgAdmin   Role = "org_admin"
+)
+
+// User represents a user account
+type User struct {
+	ID           string    `json:"id" db:"id"`
+	Email        string    `json:"email" db:"email"`
+	PasswordHash string    `json:"-" db:"password_hash"`
+	Name         string    `json:"name" db:"name"`
+	Role         Role      `json:"role" db:"role"`
+	OrgID        *string   `json:"org_id,omitempty" db:"org_id"`
+	IsActive     bool      `json:"is_active" db:"is_active"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
 // Organization represents an organization
 type Organization struct {
 	ID                   string    `json:"id" db:"id"`
@@ -188,5 +209,3 @@ type UsageLog struct {
 	Metadata  string    `json:"metadata" db:"metadata"` // JSON string
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
-
-

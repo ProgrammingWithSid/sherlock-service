@@ -6,9 +6,10 @@ interface AuthState {
   token: string | null
   orgId: string | null
   user: {
-    org_id: string
+    org_id?: string
     name: string
-    plan: string
+    plan?: string
+    role?: string
   } | null
   loading: boolean
   error: string | null
@@ -39,7 +40,16 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         const user = await authAPI.getCurrentUser()
-        this.user = user
+        this.user = {
+          org_id: user.org_id,
+          name: user.name,
+          plan: user.plan,
+          role: user.role,
+        }
+        if (user.org_id) {
+          this.orgId = user.org_id
+          localStorage.setItem('org_id', user.org_id)
+        }
         this.isAuthenticated = true
       } catch (err) {
         this.error = err instanceof Error ? err.message : 'Failed to fetch user'
@@ -68,6 +78,10 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('org_id')
     },
   },
+
+  getters: {
+    isSuperAdmin: (state): boolean => {
+      return state.user?.role === 'super_admin'
+    },
+  },
 })
-
-

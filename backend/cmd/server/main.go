@@ -130,6 +130,10 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 		r.Route("/", func(r chi.Router) {
 			apiHandler := api.NewHandler(db, reviewQueue, cfg)
 			apiHandler.RegisterRoutes(r)
+
+			// Admin routes (requires super admin)
+			adminHandler := api.NewAdminHandler(db)
+			adminHandler.RegisterRoutes(r)
 		})
 	})
 
