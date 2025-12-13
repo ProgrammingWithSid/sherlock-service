@@ -185,18 +185,24 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	expiresAt := token.Expiry
 	h.db.CreateOrUpdateInstallation(org.ID, installationID, token.AccessToken, &expiresAt)
 
+	// Get or create user
+	dbUser, err := h.db.GetUserByEmail(user.Email)
+	if err != nil {
+		// User doesn't exist, create one
+		// Use a random password since OAuth users don't need passwords
+		randomPassword := generateSessionToken() // Use session token generator for random string
+		dbUser, err = h.db.CreateUser(user.Email, randomPassword, user.Name, types.RoleOrgAdmin, &org.ID)
+		if err != nil {
+			log.Error().Err(err).Str("email", user.Email).Msg("Failed to create user")
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, map[string]string{"error": "Failed to create user"})
+			return
+		}
+	}
+
 	// Create session token
 	sessionToken := generateSessionToken()
-
-	// Store session (simplified - in production use Redis or database)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    sessionToken,
-		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400 * 7, // 7 days
-	})
+	sessionStore.Set(sessionToken, dbUser.ID, string(dbUser.Role), &org.ID)
 
 	// Get redirect URI from cookie
 	redirectCookie, err := r.Cookie("oauth_redirect_uri")
