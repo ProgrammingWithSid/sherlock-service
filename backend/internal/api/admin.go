@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/sherlock/service/internal/database"
-	"github.com/sherlock/service/internal/types"
 )
 
 type AdminHandler struct {
@@ -62,8 +61,6 @@ func (h *AdminHandler) GetOrganization(w http.ResponseWriter, r *http.Request) {
 	repoCount, _ := h.db.GetRepoCount(orgID)
 
 	// Get monthly review count
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	reviewCount, _ := h.db.GetMonthlyReviewCount(orgID)
 
 	response := map[string]interface{}{
@@ -108,9 +105,6 @@ func (h *AdminHandler) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	totalRepos := 0
 	totalReviews := 0
 	reviewsThisMonth := 0
-
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
 	for _, org := range orgs {
 		repoCount, _ := h.db.GetRepoCount(org.ID)
