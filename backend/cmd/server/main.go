@@ -165,9 +165,11 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 				return
 			}
 			// Prevent caching of index.html to ensure users get latest version
-			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
 			w.Header().Set("Pragma", "no-cache")
 			w.Header().Set("Expires", "0")
+			// Add ETag with timestamp to force revalidation
+			w.Header().Set("ETag", `"v20251213-211000"`)
 			http.ServeFile(w, req, "./frontend/dist/index.html")
 		})
 	}
