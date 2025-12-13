@@ -51,23 +51,29 @@
                 <li
                   v-for="org in organizations"
                   :key="org.id"
-                  class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+                  @click="viewOrganization(org.id)"
+                  class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50 rounded px-2 transition-colors"
                 >
-                  <div>
+                  <div class="flex-1">
                     <p class="text-sm font-medium text-gray-900">{{ org.name }}</p>
                     <p class="text-xs text-gray-500">{{ org.slug }}</p>
                   </div>
-                  <span
-                    :class="[
-                      'px-2 py-1 text-xs font-medium rounded capitalize',
-                      org.plan === 'free' ? 'bg-gray-100 text-gray-800' :
-                      org.plan === 'pro' ? 'bg-blue-100 text-blue-800' :
-                      org.plan === 'team' ? 'bg-purple-100 text-purple-800' :
-                      'bg-green-100 text-green-800'
-                    ]"
-                  >
-                    {{ org.plan }}
-                  </span>
+                  <div class="flex items-center gap-2">
+                    <span
+                      :class="[
+                        'px-2 py-1 text-xs font-medium rounded capitalize',
+                        org.plan === 'free' ? 'bg-gray-100 text-gray-800' :
+                        org.plan === 'pro' ? 'bg-blue-100 text-blue-800' :
+                        org.plan === 'team' ? 'bg-purple-100 text-purple-800' :
+                        'bg-green-100 text-green-800'
+                      ]"
+                    >
+                      {{ org.plan }}
+                    </span>
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </li>
               </ul>
             </div>
@@ -118,6 +124,7 @@ import NavBar from '@/components/NavBar.vue'
 import StatCard from '@/components/StatCard.vue'
 import { adminAPI } from '@/api/admin'
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 interface SystemStats {
   total_organizations: number
@@ -155,6 +162,11 @@ const organizations = ref<Organization[]>([])
 const organizationsLoading = ref(true)
 const users = ref<User[]>([])
 const usersLoading = ref(true)
+const router = useRouter()
+
+const viewOrganization = (orgId: string) => {
+  router.push(`/admin/organizations/${orgId}`)
+}
 
 onMounted(async () => {
   try {

@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresSuperAdmin: true },
   },
   {
+    path: '/admin/organizations/:id',
+    name: 'organization-detail',
+    component: () => import('@/views/OrganizationDetail.vue'),
+    meta: { requiresAuth: true, requiresSuperAdmin: true },
+  },
+  {
     path: '/',
     name: 'dashboard',
     component: () => import('@/views/Dashboard.vue'),

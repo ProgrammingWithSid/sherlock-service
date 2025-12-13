@@ -15,10 +15,18 @@ class APIClient {
 
     this.client.interceptors.request.use(
       (config) => {
+        const token = localStorage.getItem('session_token')
         const orgId = localStorage.getItem('org_id')
+        
+        if (token && config.headers) {
+          // Send token as Bearer token
+          config.headers['Authorization'] = `Bearer ${token}`
+        }
+        
         if (orgId && config.headers) {
           config.headers['X-Org-ID'] = orgId
         }
+        
         return config
       },
       (error) => {

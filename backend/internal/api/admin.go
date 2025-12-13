@@ -94,7 +94,7 @@ func (h *AdminHandler) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get all users
-	users, err := h.db.ListUsers(nil)
+	users, err := h.db.ListAllUsers()
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": "Failed to get users"})
@@ -131,7 +131,7 @@ func (h *AdminHandler) GetSystemStats(w http.ResponseWriter, r *http.Request) {
 
 // ListAllUsers returns all users (super admin only)
 func (h *AdminHandler) ListAllUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.db.ListUsers(nil)
+	users, err := h.db.ListAllUsers()
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": err.Error()})
