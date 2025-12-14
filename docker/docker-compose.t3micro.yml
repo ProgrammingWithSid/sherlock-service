@@ -48,7 +48,7 @@ services:
       - DATABASE_URL=postgres://sherlock:sherlock@postgres:5432/sherlock?sslmode=disable
       - REDIS_URL=redis://redis:6379
     env_file:
-      - ../.env
+      - ../backend/.env
     mem_limit: 256m
     mem_reservation: 128m
     depends_on:
@@ -67,7 +67,7 @@ services:
       - DATABASE_URL=postgres://sherlock:sherlock@postgres:5432/sherlock?sslmode=disable
       - REDIS_URL=redis://redis:6379
     env_file:
-      - ../.env
+      - ../backend/.env
     mem_limit: 256m
     mem_reservation: 128m
     depends_on:
