@@ -173,7 +173,7 @@ func (ls *LearningService) GetTeamPreferences(ctx context.Context, orgID string)
 	// Analyze feedback patterns to generate rules
 	if patternsMap, ok := patterns["feedback_distribution"].(map[string]int); ok {
 		total := patterns["total_feedback"].(int)
-		
+
 		// Rule 1: If >50% of feedback is "dismissed", suggest reducing similar comments
 		if dismissed, ok := patternsMap["dismissed"]; ok && total > 10 {
 			dismissRate := float64(dismissed) / float64(total) * 100
