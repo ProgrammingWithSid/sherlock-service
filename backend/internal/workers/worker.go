@@ -19,6 +19,7 @@ import (
 	"github.com/sherlock/service/internal/services/comment"
 	repoconfig "github.com/sherlock/service/internal/services/config"
 	"github.com/sherlock/service/internal/services/git"
+	"github.com/sherlock/service/internal/services/indexer"
 	"github.com/sherlock/service/internal/services/review"
 	"github.com/sherlock/service/internal/types"
 )
@@ -36,6 +37,7 @@ type WorkerPool struct {
 	reviewCache           *cache.ReviewCache
 	redisClient           *redis.Client
 	incrementalReviewSvc  *review.IncrementalReviewService
+	codebaseIndexer       *indexer.CodebaseIndexer
 }
 
 func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconfig.Config, redisClient *redis.Client) *WorkerPool {
@@ -146,6 +148,9 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 		reviewService,
 	)
 
+	// Initialize codebase indexer (with chunkyyy integration)
+	codebaseIndexer := indexer.NewCodebaseIndexer(db, cfg.ReposPath, "")
+
 	return &WorkerPool{
 		server:              reviewQueue.GetServer(),
 		db:                  db,
@@ -157,6 +162,7 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 		reviewCache:         reviewCache,
 		redisClient:         redisClient,
 		incrementalReviewSvc: incrementalReviewSvc,
+		codebaseIndexer:     codebaseIndexer,
 	}
 }
 
