@@ -19,39 +19,11 @@
       </div>
 
       <div v-else class="space-y-6">
-        <!-- Organization Global Rules Info -->
-        <div v-if="orgRules.length > 0" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div class="flex items-start">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-              </svg>
-            </div>
-            <div class="ml-3 flex-1">
-              <h4 class="text-sm font-medium text-blue-800">Organization Global Rules</h4>
-              <p class="mt-1 text-sm text-blue-700">
-                These rules are inherited from your organization settings. You can override them below with repository-specific rules.
-              </p>
-              <div class="mt-3 space-y-2">
-                <div
-                  v-for="(rule, index) in orgRules"
-                  :key="index"
-                  class="text-sm text-blue-800 bg-blue-100 px-3 py-2 rounded"
-                >
-                  {{ rule }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Repository Rules Editor -->
         <GlobalRulesEditor
           :rules="repoRules"
-          :org-rules="orgRules"
-          title="Repository-Specific Rules"
-          description="Configure rules that override organization global rules for this repository. Leave empty to use organization rules only."
-          :show-org-info="true"
+          title="Repository Rules"
+          description="Configure rules that will be applied to code reviews for this repository. These rules are passed to code-sherlock."
           :loading="false"
           @save="handleSaveRules"
           @cancel="handleCancelRules"
@@ -142,7 +114,7 @@ const handleSaveRules = async (rules: string[]): Promise<void> => {
   loading.value = true
   try {
     const [owner, repo] = props.repo.full_name.split('/')
-    
+
     // Update repo config with new rules
     const updatedConfig: RepoConfig = {
       ...repoConfig.value,
@@ -189,4 +161,3 @@ onMounted(async () => {
   }
 })
 </script>
-

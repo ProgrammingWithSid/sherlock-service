@@ -184,15 +184,7 @@ func buildReviewConfigFromRepo(org *types.Organization, repo *types.Repository, 
 		GlobalRules: []string{},
 	}
 
-	// Start with organization global rules
-	if org != nil && org.GlobalRules != "" && org.GlobalRules != "[]" {
-		var orgRules []string
-		if err := json.Unmarshal([]byte(org.GlobalRules), &orgRules); err == nil && len(orgRules) > 0 {
-			config.GlobalRules = orgRules
-		}
-	}
-
-	// Repository rules override organization rules (repo takes precedence)
+	// Use repository-specific rules only
 	if repoConfig != nil && len(repoConfig.Rules) > 0 {
 		config.GlobalRules = repoConfig.Rules
 	}
@@ -572,18 +564,7 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 		}
 	}
 
-	// Start with organization global rules
-	if repo != nil {
-		org, err := wp.db.GetOrganizationByID(repo.OrgID)
-		if err == nil && org != nil && org.GlobalRules != "" && org.GlobalRules != "[]" {
-			var orgRules []string
-			if err := json.Unmarshal([]byte(org.GlobalRules), &orgRules); err == nil && len(orgRules) > 0 {
-				config.GlobalRules = orgRules
-			}
-		}
-	}
-
-	// Repository rules override organization rules (repo takes precedence)
+	// Use repository-specific rules only
 	if repoConfig != nil && len(repoConfig.Rules) > 0 {
 		config.GlobalRules = repoConfig.Rules
 	}

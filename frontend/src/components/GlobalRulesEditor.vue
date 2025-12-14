@@ -45,22 +45,6 @@
         + Add Rule
       </button>
 
-      <!-- Info about org rules -->
-      <div v-if="showOrgInfo && orgRules && orgRules.length > 0" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <p class="text-sm text-blue-800">
-          <strong>Organization Rules:</strong> These rules are inherited from your organization settings.
-          {{ localRules.length > 0 && localRules[0] !== '' ? 'You can override them with repository-specific rules.' : 'Add rules below to override them for this repository.' }}
-        </p>
-        <div class="mt-2 space-y-1">
-          <div
-            v-for="(rule, index) in orgRules"
-            :key="index"
-            class="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded"
-          >
-            {{ rule }}
-          </div>
-        </div>
-      </div>
 
       <!-- Actions -->
       <div class="mt-6 flex justify-end space-x-3">
@@ -87,10 +71,8 @@ import { ref, watch, onMounted } from 'vue'
 
 interface Props {
   rules: string[]
-  orgRules?: string[]
   title?: string
   description?: string
-  showOrgInfo?: boolean
   loading?: boolean
 }
 
@@ -101,10 +83,8 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   rules: () => [],
-  orgRules: () => [],
-  title: 'Global Rules',
-  description: 'Configure rules that will be applied to all code reviews. These rules are passed to code-sherlock.',
-  showOrgInfo: false,
+  title: 'Rules',
+  description: 'Configure rules that will be applied to code reviews. These rules are passed to code-sherlock.',
   loading: false,
 })
 

@@ -72,89 +72,23 @@
         </div>
       </div>
 
-      <!-- Global Rules Editor -->
-      <GlobalRulesEditor
-        v-if="orgStore.current"
-        :rules="globalRules"
-        :title="'Organization Global Rules'"
-        :description="'Configure global rules that will be applied to all repositories in this organization. Repository-specific rules will override these.'"
-        :loading="loadingRules"
-        @save="handleSaveRules"
-        @cancel="handleCancelRules"
-      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import NavBar from '@/components/NavBar.vue'
-import GlobalRulesEditor from '@/components/GlobalRulesEditor.vue'
 import { useOrganizationStore } from '@/stores/organization'
-import { useAuthStore } from '@/stores/auth'
-import { organizationsAPI } from '@/api/organizations'
 import type { Organization } from '@/types'
-import { ref, watch, onMounted } from 'vue'
+import { onMounted } from 'vue'
 
 const orgStore = useOrganizationStore()
-const authStore = useAuthStore()
 
-const globalRules = ref<string[]>([])
-const loadingRules = ref(false)
-
-const selectOrganization = async (org: Organization): Promise<void> => {
+const selectOrganization = (org: Organization): void => {
   orgStore.setOrganization(org)
-  await loadGlobalRules(org.id)
 }
 
-const loadGlobalRules = async (orgId: string): Promise<void> => {
-  loadingRules.value = true
-  try {
-    globalRules.value = await organizationsAPI.getGlobalRules(orgId)
-    if (globalRules.value.length === 0) {
-      globalRules.value = ['']
-    }
-  } catch (error) {
-    console.error('Failed to load global rules:', error)
-    globalRules.value = ['']
-  } finally {
-    loadingRules.value = false
-  }
-}
-
-const handleSaveRules = async (rules: string[]): Promise<void> => {
-  if (!orgStore.current) return
-
-  loadingRules.value = true
-  try {
-    await organizationsAPI.updateGlobalRules(orgStore.current.id, rules)
-    globalRules.value = rules
-    alert('Global rules saved successfully!')
-  } catch (error) {
-    console.error('Failed to save global rules:', error)
-    alert('Failed to save global rules. Please try again.')
-  } finally {
-    loadingRules.value = false
-  }
-}
-
-const handleCancelRules = (): void => {
-  // Rules are reset in the component
-}
-
-// Watch for org changes
-watch(() => orgStore.current, async (newOrg) => {
-  if (newOrg) {
-    await loadGlobalRules(newOrg.id)
-  }
-})
-
-onMounted(async () => {
-  await orgStore.fetchOrganizations()
-  if (orgStore.current) {
-    await loadGlobalRules(orgStore.current.id)
-  } else if (authStore.orgId) {
-    // Try to load rules for current org
-    await loadGlobalRules(authStore.orgId)
-  }
+onMounted(() => {
+  orgStore.fetchOrganizations()
 })
 </script>
