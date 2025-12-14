@@ -55,17 +55,31 @@ jobs:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          if [ -n "${{ secrets.EC2_HOST }}" ]; then
+            ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          else
+            echo "⚠️  Warning: EC2_HOST secret not set"
+            exit 1
+          fi
 
       - name: Deploy to EC2
         env:
           SSH_KEY: ~/.ssh/deploy_key
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
+          if [ -z "${{ secrets.EC2_HOST }}" ]; then
+            echo "❌ Error: EC2_HOST secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "❌ Error: EC2_SSH_KEY secret is not set"
+            exit 1
+          fi
           chmod +x scripts/deploy-ec2.sh
-          ./scripts/deploy-ec2.sh ${{ secrets.EC2_HOST }} ${{ env.EC2_USER }}
+          ./scripts/deploy-ec2.sh "${{ secrets.EC2_HOST }}" "${{ env.EC2_USER }}"
 
       - name: Health Check
         run: |
