@@ -194,25 +194,25 @@ func (db *DB) migrate() error {
 		`DO $$
 		BEGIN
 			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'file_path'
 			) THEN
 				ALTER TABLE review_feedback ADD COLUMN file_path TEXT;
 				UPDATE review_feedback SET file_path = '' WHERE file_path IS NULL;
 				ALTER TABLE review_feedback ALTER COLUMN file_path SET NOT NULL;
 			END IF;
-			
+
 			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'line_number'
 			) THEN
 				ALTER TABLE review_feedback ADD COLUMN line_number INT;
 				UPDATE review_feedback SET line_number = 0 WHERE line_number IS NULL;
 				ALTER TABLE review_feedback ALTER COLUMN line_number SET NOT NULL;
 			END IF;
-			
+
 			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'org_id'
 			) THEN
 				ALTER TABLE review_feedback ADD COLUMN org_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
@@ -222,44 +222,74 @@ func (db *DB) migrate() error {
 				WHERE r.id = rf.review_id AND rf.org_id IS NULL;
 				ALTER TABLE review_feedback ALTER COLUMN org_id SET NOT NULL;
 			END IF;
-			
+
 			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'updated_at'
 			) THEN
 				ALTER TABLE review_feedback ADD COLUMN updated_at TIMESTAMP DEFAULT NOW();
+			END IF;
+			
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'review_feedback' AND column_name = 'feedback'
+			) THEN
+				ALTER TABLE review_feedback ADD COLUMN feedback TEXT;
+				UPDATE review_feedback SET feedback = '' WHERE feedback IS NULL;
+				ALTER TABLE review_feedback ALTER COLUMN feedback SET NOT NULL;
 			END IF;
 		EXCEPTION
 			WHEN duplicate_column THEN
 				NULL;
 		END $$;`,
-		`CREATE INDEX IF NOT EXISTS idx_review_feedback_review ON review_feedback(review_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_review_feedback_user ON review_feedback(user_id)`,
-		// Create org_id index only if column exists
+		// Create indexes only if columns exist
 		`DO $$
 		BEGIN
 			IF EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'review_feedback' AND column_name = 'review_id'
+			) THEN
+				CREATE INDEX IF NOT EXISTS idx_review_feedback_review ON review_feedback(review_id);
+			END IF;
+			
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'review_feedback' AND column_name = 'user_id'
+			) THEN
+				CREATE INDEX IF NOT EXISTS idx_review_feedback_user ON review_feedback(user_id);
+			END IF;
+			
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'org_id'
 			) THEN
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_org ON review_feedback(org_id);
 			END IF;
-		END $$;`,
-		// Create file_path/line_number index only if columns exist
-		`DO $$
-		BEGIN
+			
 			IF EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'file_path'
 			) AND EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'line_number'
 			) THEN
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_file_line ON review_feedback(file_path, line_number);
 			END IF;
+			
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'review_feedback' AND column_name = 'feedback'
+			) THEN
+				CREATE INDEX IF NOT EXISTS idx_review_feedback_feedback ON review_feedback(feedback);
+			END IF;
+			
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'review_feedback' AND column_name = 'created_at'
+			) THEN
+				CREATE INDEX IF NOT EXISTS idx_review_feedback_created ON review_feedback(created_at);
+			END IF;
 		END $$;`,
-		`CREATE INDEX IF NOT EXISTS idx_review_feedback_feedback ON review_feedback(feedback)`,
-		`CREATE INDEX IF NOT EXISTS idx_review_feedback_created ON review_feedback(created_at)`,
 		// Function to update updated_at timestamp
 		`CREATE OR REPLACE FUNCTION update_updated_at_column()
 		RETURNS TRIGGER AS $$
