@@ -57,7 +57,7 @@ async fn health_check() -> Json<serde_json::Value> {
 async fn extract_symbols(
     State(state): State<AppState>,
     Path((repo_path, file_path)): Path<(String, String)>,
-    Json(payload): Json<ExtractRequest>,
+    Json(_payload): Json<ExtractRequest>,
 ) -> Result<Json<ExtractResponse>, StatusCode> {
     let full_path = format!("{}/{}", repo_path, file_path);
 
