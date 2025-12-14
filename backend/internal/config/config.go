@@ -60,8 +60,8 @@ type Config struct {
 }
 
 func Load() *Config {
-	// Load .env from project root (3 levels up from backend/cmd/server)
-	_ = godotenv.Load("../../../.env")
+	// Load .env from backend directory (2 levels up from backend/cmd/server)
+	_ = godotenv.Load("../../.env")
 
 	return &Config{
 		Port:           getEnvInt("PORT", 3000),
