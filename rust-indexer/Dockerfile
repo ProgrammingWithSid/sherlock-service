@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.75-slim as builder
+FROM rust:1.75-slim AS builder
 
 WORKDIR /app
 
@@ -10,10 +10,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Cargo files
-COPY rust-indexer/Cargo.toml rust-indexer/Cargo.lock ./
+COPY Cargo.toml Cargo.lock ./
 
 # Copy source
-COPY rust-indexer/src ./src
+COPY src ./src
 
 # Build release
 RUN cargo build --release
