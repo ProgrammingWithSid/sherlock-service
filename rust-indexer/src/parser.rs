@@ -246,6 +246,8 @@ impl ParserService {
                         _ => "unknown",
                     };
 
+                    // Check exported status before moving name
+                    let exported = name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false);
                     let signature = self.extract_signature(node, source).ok();
                     symbols.push(CodeSymbol {
                         id: format!("{}_{}_{}", file_path, name, node.start_position().row),
@@ -256,7 +258,7 @@ impl ParserService {
                         line_end: node.end_position().row as i32 + 1,
                         signature,
                         dependencies: vec![],
-                        exported: name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false),
+                        exported,
                         visibility: None,
                     });
                 }
