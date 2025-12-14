@@ -14,6 +14,7 @@ import (
 	"github.com/sherlock/service/internal/config"
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/queue"
+	"github.com/sherlock/service/internal/services/metrics"
 	"github.com/sherlock/service/internal/types"
 )
 
@@ -21,14 +22,15 @@ type Handler struct {
 	db             *database.DB
 	reviewQueue    *queue.ReviewQueue
 	config         *config.Config
-	metricsService interface{} // Will be *metrics.MetricsService when integrated
+	metricsService *metrics.MetricsService
 }
 
-func NewHandler(db *database.DB, reviewQueue *queue.ReviewQueue, cfg *config.Config) *Handler {
+func NewHandler(db *database.DB, reviewQueue *queue.ReviewQueue, cfg *config.Config, metricsService *metrics.MetricsService) *Handler {
 	return &Handler{
-		db:          db,
-		reviewQueue: reviewQueue,
-		config:      cfg,
+		db:             db,
+		reviewQueue:    reviewQueue,
+		config:         cfg,
+		metricsService: metricsService,
 	}
 }
 
@@ -570,11 +572,39 @@ func (h *Handler) GetQueueStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
-	// For now, return basic metrics
-	// TODO: Integrate metrics service when available
-	response := map[string]interface{}{
-		"message": "Metrics endpoint - integration pending",
-		"note":    "Metrics service will be integrated in next update",
+	if h.metricsService == nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, map[string]string{"error": "Metrics service not available"})
+		return
 	}
+
+	reviewMetrics, err := h.metricsService.GetReviewMetrics()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get review metrics")
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to get metrics"})
+		return
+	}
+
+	cacheHitRate := h.metricsService.GetCacheHitRate()
+	successRate := h.metricsService.GetSuccessRate()
+
+	response := map[string]interface{}{
+		"reviews": map[string]interface{}{
+			"total":            reviewMetrics.TotalReviews,
+			"successful":       reviewMetrics.SuccessfulReviews,
+			"failed":           reviewMetrics.FailedReviews,
+			"average_duration_ms": reviewMetrics.AverageDuration,
+			"cache_hits":       reviewMetrics.CacheHits,
+			"cache_misses":     reviewMetrics.CacheMisses,
+			"incremental":      reviewMetrics.IncrementalReviews,
+			"full":             reviewMetrics.FullReviews,
+		},
+		"rates": map[string]interface{}{
+			"cache_hit_rate": cacheHitRate,
+			"success_rate":    successRate,
+		},
+	}
+
 	render.JSON(w, r, response)
 }
