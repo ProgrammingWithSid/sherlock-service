@@ -91,8 +91,17 @@ func (ci *CodebaseIndexer) IndexRepository(ctx context.Context, repoID string, r
 
 // findCodeFiles finds all code files in the repository
 func (ci *CodebaseIndexer) findCodeFiles(repoPath string) ([]string, error) {
-	// Supported extensions for chunkyyy
-	extensions := []string{".ts", ".tsx", ".js", ".jsx", ".vue"}
+	// Supported extensions for chunkyyy (includes Rust via tree-sitter)
+	extensions := []string{
+		".ts", ".tsx", ".js", ".jsx", ".vue", // JavaScript/TypeScript
+		".rs",                                 // Rust (via tree-sitter)
+		".go",                                 // Go (via tree-sitter)
+		".py",                                 // Python (via tree-sitter)
+		".java",                               // Java (via tree-sitter)
+		".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", // C/C++ (via tree-sitter)
+		".rb",                                 // Ruby (via tree-sitter)
+		".php",                                // PHP (via tree-sitter)
+	}
 
 	var files []string
 	err := filepath.Walk(repoPath, func(path string, info os.FileInfo, err error) error {

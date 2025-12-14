@@ -123,7 +123,16 @@ func (ei *EnhancedIndexer) GetChunkHashForRange(ctx context.Context, filePath st
 // IsCodeFile checks if a file is a code file that chunkyyy can parse
 func IsCodeFile(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	supportedExts := []string{".ts", ".tsx", ".js", ".jsx", ".vue"}
+	supportedExts := []string{
+		".ts", ".tsx", ".js", ".jsx", ".vue", // JavaScript/TypeScript
+		".rs",                                 // Rust
+		".go",                                 // Go
+		".py",                                 // Python
+		".java",                               // Java
+		".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", // C/C++
+		".rb",                                 // Ruby
+		".php",                                // PHP
+	}
 	for _, supportedExt := range supportedExts {
 		if ext == supportedExt {
 			return true
