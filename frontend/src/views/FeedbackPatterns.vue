@@ -117,7 +117,7 @@ const loadData = async () => {
       feedbackAPI.getPatterns(),
       feedbackAPI.getPreferences(),
     ]);
-    
+
     // Ensure patterns has default structure if empty
     if (patterns.value && !patterns.value.feedback_distribution) {
       patterns.value.feedback_distribution = {};
@@ -129,7 +129,7 @@ const loadData = async () => {
     console.error('Failed to load feedback data:', err);
     const errorMessage = err.response?.data?.error || err.message || 'Failed to load feedback patterns';
     error.value = errorMessage;
-    
+
     // Set empty defaults on error
     patterns.value = {
       feedback_distribution: {},

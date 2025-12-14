@@ -134,6 +134,40 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_org ON github_installations(org_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_id ON github_installations(installation_id)`,
+		// Review feedback table for learning system
+		`CREATE TABLE IF NOT EXISTS review_feedback (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			review_id UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+			comment_id TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			line_number INT NOT NULL,
+			feedback TEXT NOT NULL,
+			user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+			org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW(),
+			UNIQUE(review_id, comment_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_review_feedback_review ON review_feedback(review_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_review_feedback_user ON review_feedback(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_review_feedback_org ON review_feedback(org_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_review_feedback_file_line ON review_feedback(file_path, line_number)`,
+		`CREATE INDEX IF NOT EXISTS idx_review_feedback_feedback ON review_feedback(feedback)`,
+		`CREATE INDEX IF NOT EXISTS idx_review_feedback_created ON review_feedback(created_at)`,
+		// Function to update updated_at timestamp
+		`CREATE OR REPLACE FUNCTION update_updated_at_column()
+		RETURNS TRIGGER AS $$
+		BEGIN
+			NEW.updated_at = NOW();
+			RETURN NEW;
+		END;
+		$$ language 'plpgsql'`,
+		// Trigger to update updated_at on review_feedback
+		`DROP TRIGGER IF EXISTS update_review_feedback_updated_at ON review_feedback`,
+		`CREATE TRIGGER update_review_feedback_updated_at
+		BEFORE UPDATE ON review_feedback
+		FOR EACH ROW
+		EXECUTE FUNCTION update_updated_at_column()`,
 	}
 
 	for _, query := range queries {

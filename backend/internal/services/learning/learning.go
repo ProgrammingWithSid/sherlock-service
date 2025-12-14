@@ -71,11 +71,11 @@ func (ls *LearningService) RecordFeedback(ctx context.Context, feedback ReviewFe
 // GetFeedbackPatterns analyzes feedback patterns for an organization
 func (ls *LearningService) GetFeedbackPatterns(ctx context.Context, orgID string) (map[string]interface{}, error) {
 	// Analyze accepted vs dismissed patterns
+	// Use subquery to calculate total first, then calculate percentage
 	query := `
 		SELECT
 			feedback,
-			COUNT(*) as count,
-			COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as percentage
+			COUNT(*) as count
 		FROM review_feedback
 		WHERE org_id = $1
 		GROUP BY feedback
@@ -83,7 +83,12 @@ func (ls *LearningService) GetFeedbackPatterns(ctx context.Context, orgID string
 
 	rows, err := ls.db.Conn().QueryContext(ctx, query, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query feedback patterns: %w", err)
+		log.Error().Err(err).Str("org_id", orgID).Msg("Failed to query feedback patterns")
+		// Return empty patterns if table doesn't exist or query fails
+		return map[string]interface{}{
+			"feedback_distribution": map[string]int{},
+			"total_feedback":        0,
+		}, nil
 	}
 	defer rows.Close()
 
@@ -94,14 +99,22 @@ func (ls *LearningService) GetFeedbackPatterns(ctx context.Context, orgID string
 	for rows.Next() {
 		var feedback string
 		var count int
-		var percentage float64
 
-		if err := rows.Scan(&feedback, &count, &percentage); err != nil {
+		if err := rows.Scan(&feedback, &count); err != nil {
+			log.Warn().Err(err).Msg("Failed to scan feedback row")
 			continue
 		}
 
 		feedbackCounts[feedback] = count
 		total += count
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Error().Err(err).Msg("Error iterating feedback rows")
+		return map[string]interface{}{
+			"feedback_distribution": map[string]int{},
+			"total_feedback":        0,
+		}, nil
 	}
 
 	patterns["feedback_distribution"] = feedbackCounts
@@ -135,7 +148,9 @@ func (ls *LearningService) ShouldSuppressComment(ctx context.Context, orgID stri
 	var count int
 	err := ls.db.Conn().QueryRowContext(ctx, query, orgID, filePath, lineNumber).Scan(&count)
 	if err != nil {
-		return false, err
+		// If table doesn't exist or query fails, don't suppress
+		log.Warn().Err(err).Msg("Failed to check if comment should be suppressed")
+		return false, nil
 	}
 
 	// If 3+ dismissals in last 30 days, suppress similar comments
