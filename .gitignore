@@ -92,3 +92,7 @@ coverage/
 .pnp.*
 Makefile
 docs/
+
+# Scripts and documentation
+*.sh
+*.md
