@@ -9,13 +9,13 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Cargo files
-COPY Cargo.toml Cargo.lock ./
+# Copy Cargo files (Cargo.lock will be generated during build if missing)
+COPY Cargo.toml ./
 
 # Copy source
 COPY src ./src
 
-# Build release
+# Build release (cargo will generate Cargo.lock automatically)
 RUN cargo build --release
 
 # Runtime stage
