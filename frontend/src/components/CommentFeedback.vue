@@ -83,4 +83,3 @@ const submitFeedback = async (feedback: 'accepted' | 'dismissed' | 'fixed') => {
   }
 };
 </script>
-

@@ -44,6 +44,11 @@ func (db *DB) Ping() error {
 	return db.conn.Ping()
 }
 
+// Conn returns the underlying sql.DB connection for advanced queries
+func (db *DB) Conn() *sql.DB {
+	return db.conn
+}
+
 func (db *DB) migrate() error {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS organizations (

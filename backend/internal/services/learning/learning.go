@@ -2,7 +2,6 @@ package learning
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -36,11 +35,6 @@ type ReviewFeedback struct {
 
 // RecordFeedback records user feedback on a review comment
 func (ls *LearningService) RecordFeedback(ctx context.Context, feedback ReviewFeedback) error {
-	feedbackJSON, err := json.Marshal(feedback)
-	if err != nil {
-		return fmt.Errorf("failed to marshal feedback: %w", err)
-	}
-
 	// Store feedback in database (using review_feedback table from migration)
 	query := `
 		INSERT INTO review_feedback (review_id, comment_id, file_path, line_number, feedback, user_id, org_id, created_at)
@@ -49,7 +43,7 @@ func (ls *LearningService) RecordFeedback(ctx context.Context, feedback ReviewFe
 		SET feedback = EXCLUDED.feedback, updated_at = NOW()
 	`
 
-	_, err = ls.db.DB().ExecContext(ctx, query,
+	_, err := ls.db.Conn().ExecContext(ctx, query,
 		feedback.ReviewID,
 		feedback.CommentID,
 		feedback.FilePath,
@@ -87,7 +81,7 @@ func (ls *LearningService) GetFeedbackPatterns(ctx context.Context, orgID string
 		GROUP BY feedback
 	`
 
-	rows, err := ls.db.DB().QueryContext(ctx, query, orgID)
+	rows, err := ls.db.Conn().QueryContext(ctx, query, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query feedback patterns: %w", err)
 	}
@@ -135,7 +129,7 @@ func (ls *LearningService) ShouldSuppressComment(ctx context.Context, orgID stri
 	`
 
 	var count int
-	err := ls.db.DB().QueryRowContext(ctx, query, orgID, filePath, lineNumber).Scan(&count)
+	err := ls.db.Conn().QueryRowContext(ctx, query, orgID, filePath, lineNumber).Scan(&count)
 	if err != nil {
 		return false, err
 	}

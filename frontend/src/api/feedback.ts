@@ -32,4 +32,3 @@ export const feedbackAPI = {
     return apiClient.get('/api/v1/feedback/preferences');
   },
 };
-
