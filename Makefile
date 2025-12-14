@@ -70,7 +70,7 @@ lint-all: lint frontend-lint
 .DEFAULT_GOAL := build
 
 # ECR Configuration
-AWS_REGION ?= us-east-1
+AWS_REGION ?= ap-south-1
 ECR_REPOSITORY_SERVER ?= sherlock-service/server
 ECR_REPOSITORY_WORKER ?= sherlock-service/worker
 SSH_KEY ?= ~/Desktop/sherlock-service.pem
@@ -108,7 +108,14 @@ deploy-build:
 		docker-compose -f docker-compose.yml -f docker-compose.build.yml build --no-cache && \
 		docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d"
 
-# Setup ECR login on EC2 (one-time setup)
+# Setup AWS credentials on EC2
+setup-aws:
+	@echo "🔐 Setting up AWS credentials on EC2..."
+	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
+		git fetch origin && git reset --hard origin/main && \
+		bash scripts/setup-aws-credentials.sh"
+
+# Setup ECR login on EC2 (one-time setup, requires AWS credentials)
 setup-ecr-login:
 	@echo "🔐 Setting up ECR login on EC2..."
 	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
