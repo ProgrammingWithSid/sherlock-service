@@ -78,6 +78,11 @@ jobs:
             echo "❌ Error: EC2_SSH_KEY secret is not set"
             exit 1
           fi
+          if [ -z "$ECR_REGISTRY" ]; then
+            echo "❌ Error: ECR_REGISTRY is not set"
+            exit 1
+          fi
+          echo "🔑 ECR Registry: $ECR_REGISTRY"
           chmod +x scripts/deploy-ec2.sh
           ./scripts/deploy-ec2.sh "${{ secrets.EC2_HOST }}" "${{ env.EC2_USER }}"
 

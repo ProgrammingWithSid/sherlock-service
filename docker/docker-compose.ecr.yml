@@ -41,7 +41,7 @@ services:
       retries: 5
 
   api:
-    image: ${ECR_REGISTRY:-ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com}/sherlock-service/server:latest
+    image: ${ECR_REGISTRY}/sherlock-service/server:latest
     ports:
       - "3000:3000"
     environment:
@@ -60,7 +60,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: ${ECR_REGISTRY:-ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com}/sherlock-service/worker:latest
+    image: ${ECR_REGISTRY}/sherlock-service/worker:latest
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgres://sherlock:sherlock@postgres:5432/sherlock?sslmode=disable
