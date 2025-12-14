@@ -150,8 +150,8 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 		reviewService,
 	)
 
-	// Initialize codebase indexer (with chunkyyy integration)
-	codebaseIndexer := indexer.NewCodebaseIndexer(db, cfg.ReposPath, "")
+	// Initialize codebase indexer (with Rust or chunkyyy integration)
+	codebaseIndexer := indexer.NewCodebaseIndexer(db, cfg.ReposPath, "", cfg.RustIndexerURL)
 
 	// Initialize metrics service
 	metricsService := metrics.NewMetricsService(redisClient)

@@ -30,15 +30,29 @@ type CodeSymbol struct {
 type CodebaseIndexer struct {
 	db            *database.DB
 	chunkyyy      *ChunkyyyService
+	rustIndexer   *RustIndexerService
 	repoPath      string
+	useRust       bool
 }
 
 // NewCodebaseIndexer creates a new codebase indexer
-func NewCodebaseIndexer(db *database.DB, repoPath string, nodePath string) *CodebaseIndexer {
+func NewCodebaseIndexer(db *database.DB, repoPath string, nodePath string, rustIndexerURL string) *CodebaseIndexer {
+	// Try to use Rust indexer if available
+	rustIndexer := NewRustIndexerService(rustIndexerURL)
+	useRust := rustIndexer.IsEnabled()
+
+	if useRust {
+		log.Info().Str("url", rustIndexerURL).Msg("Rust indexer enabled")
+	} else {
+		log.Info().Msg("Using chunkyyy (Node.js) indexer")
+	}
+
 	return &CodebaseIndexer{
-		db:       db,
-		chunkyyy: NewChunkyyyService(repoPath, nodePath),
-		repoPath: repoPath,
+		db:          db,
+		chunkyyy:    NewChunkyyyService(repoPath, nodePath),
+		rustIndexer: rustIndexer,
+		repoPath:    repoPath,
+		useRust:     useRust,
 	}
 }
 
@@ -64,7 +78,21 @@ func (ci *CodebaseIndexer) IndexRepository(ctx context.Context, repoID string, r
 	// Index each file
 	totalSymbols := 0
 	for _, filePath := range codeFiles {
-		symbols, err := ci.chunkyyy.ExtractSymbols(ctx, filePath)
+		var symbols []CodeSymbol
+		var err error
+
+		// Try Rust indexer first if enabled, fallback to chunkyyy
+		if ci.useRust {
+			symbols, err = ci.rustIndexer.ExtractSymbols(ctx, ci.repoPath, filePath)
+			if err != nil {
+				log.Debug().Err(err).Str("file", filePath).Msg("Rust indexer failed, falling back to chunkyyy")
+				// Fallback to chunkyyy
+				symbols, err = ci.chunkyyy.ExtractSymbols(ctx, filePath)
+			}
+		} else {
+			symbols, err = ci.chunkyyy.ExtractSymbols(ctx, filePath)
+		}
+
 		if err != nil {
 			log.Warn().Err(err).Str("file", filePath).Msg("Failed to extract symbols, skipping")
 			continue
@@ -182,10 +210,22 @@ func (ci *CodebaseIndexer) storeSymbol(ctx context.Context, symbol *CodeSymbol) 
 	return nil
 }
 
-// GetRelatedCode finds code related to a given symbol or file using chunkyyy dependencies
+// GetRelatedCode finds code related to a given symbol or file using dependencies
 func (ci *CodebaseIndexer) GetRelatedCode(ctx context.Context, repoID string, filePath string, symbolName string) ([]CodeSymbol, error) {
-	// Extract dependencies from the file using chunkyyy
-	deps, err := ci.chunkyyy.ExtractDependencies(ctx, filePath)
+	// Extract dependencies - try Rust first, fallback to chunkyyy
+	var deps []Dependency
+	var err error
+
+	if ci.useRust {
+		deps, err = ci.rustIndexer.ExtractDependencies(ctx, ci.repoPath, filePath)
+		if err != nil {
+			log.Debug().Err(err).Str("file", filePath).Msg("Rust indexer failed, falling back to chunkyyy")
+			deps, err = ci.chunkyyy.ExtractDependencies(ctx, filePath)
+		}
+	} else {
+		deps, err = ci.chunkyyy.ExtractDependencies(ctx, filePath)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract dependencies: %w", err)
 	}

@@ -57,6 +57,9 @@ type Config struct {
 	// Features
 	EnableIncrementalReviews bool
 	EnableCodebaseIndexing   bool
+
+	// Rust Indexer
+	RustIndexerURL string // URL for Rust indexer microservice (optional)
 }
 
 func Load() *Config {
@@ -99,6 +102,8 @@ func Load() *Config {
 
 		EnableIncrementalReviews: getEnvBool("ENABLE_INCREMENTAL_REVIEWS", true),
 		EnableCodebaseIndexing:   getEnvBool("ENABLE_CODEBASE_INDEXING", false),
+
+		RustIndexerURL: getEnv("RUST_INDEXER_URL", ""), // Optional: http://localhost:8081
 	}
 }
 
