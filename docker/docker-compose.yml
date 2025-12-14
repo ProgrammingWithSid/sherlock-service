@@ -29,9 +29,7 @@ services:
       retries: 5
 
   api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: ${ECR_REGISTRY:-ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com}/sherlock-service/server:latest
     ports:
       - "3000:3000"
     environment:
@@ -48,9 +46,7 @@ services:
     restart: unless-stopped
 
   worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.worker
+    image: ${ECR_REGISTRY:-ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com}/sherlock-service/worker:latest
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgres://sherlock:sherlock@postgres:5432/sherlock?sslmode=disable

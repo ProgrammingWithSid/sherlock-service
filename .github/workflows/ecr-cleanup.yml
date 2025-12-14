@@ -1,0 +1,153 @@
+name: ECR Image Cleanup
+
+on:
+  schedule:
+    # Run weekly on Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY_SERVER: sherlock-service/server
+  ECR_REPOSITORY_WORKER: sherlock-service/worker
+  KEEP_IMAGES: 10 # Keep last 10 images per repository
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Cleanup server images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          KEEP_IMAGES: ${{ env.KEEP_IMAGES }}
+        run: |
+          echo "🧹 Cleaning up old server images (keeping last $KEEP_IMAGES images)..."
+
+          # Get all image tags sorted by push date (newest first), exclude 'latest'
+          ALL_IMAGES=$(aws ecr describe-images \
+            --repository-name ${{ env.ECR_REPOSITORY_SERVER }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'sort_by(imageDetails,&imagePushedAt)[::-1].[imageTags[0],imagePushedAt]' \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$ALL_IMAGES" ]; then
+            echo "✅ No images found"
+          else
+            # Filter out 'latest' and get tags to keep (newest KEEP_IMAGES)
+            KEEP_TAGS=$(echo "$ALL_IMAGES" | grep -v "latest" | head -n $KEEP_IMAGES | awk '{print $1}' || echo "")
+
+            # Get all tags except the ones to keep
+            ALL_TAGS=$(echo "$ALL_IMAGES" | grep -v "latest" | awk '{print $1}' || echo "")
+            DELETE_TAGS=$(echo "$ALL_TAGS" | tail -n +$((KEEP_IMAGES + 1)) || echo "")
+
+            if [ -z "$DELETE_TAGS" ]; then
+              echo "✅ No old images to delete (only $KEEP_IMAGES or fewer images exist)"
+            else
+              echo "🗑️  Deleting old images:"
+              echo "$DELETE_TAGS"
+              for IMAGE_TAG in $DELETE_TAGS; do
+                aws ecr batch-delete-image \
+                  --repository-name ${{ env.ECR_REPOSITORY_SERVER }} \
+                  --region ${{ env.AWS_REGION }} \
+                  --image-ids imageTag=$IMAGE_TAG 2>/dev/null || true
+              done
+              echo "✅ Cleanup completed"
+            fi
+          fi
+
+      - name: Cleanup worker images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          KEEP_IMAGES: ${{ env.KEEP_IMAGES }}
+        run: |
+          echo "🧹 Cleaning up old worker images (keeping last $KEEP_IMAGES images)..."
+
+          # Get all image tags sorted by push date (newest first), exclude 'latest'
+          ALL_IMAGES=$(aws ecr describe-images \
+            --repository-name ${{ env.ECR_REPOSITORY_WORKER }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'sort_by(imageDetails,&imagePushedAt)[::-1].[imageTags[0],imagePushedAt]' \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$ALL_IMAGES" ]; then
+            echo "✅ No images found"
+          else
+            # Filter out 'latest' and get tags to keep (newest KEEP_IMAGES)
+            KEEP_TAGS=$(echo "$ALL_IMAGES" | grep -v "latest" | head -n $KEEP_IMAGES | awk '{print $1}' || echo "")
+
+            # Get all tags except the ones to keep
+            ALL_TAGS=$(echo "$ALL_IMAGES" | grep -v "latest" | awk '{print $1}' || echo "")
+            DELETE_TAGS=$(echo "$ALL_TAGS" | tail -n +$((KEEP_IMAGES + 1)) || echo "")
+
+            if [ -z "$DELETE_TAGS" ]; then
+              echo "✅ No old images to delete (only $KEEP_IMAGES or fewer images exist)"
+            else
+              echo "🗑️  Deleting old images:"
+              echo "$DELETE_TAGS"
+              for IMAGE_TAG in $DELETE_TAGS; do
+                aws ecr batch-delete-image \
+                  --repository-name ${{ env.ECR_REPOSITORY_WORKER }} \
+                  --region ${{ env.AWS_REGION }} \
+                  --image-ids imageTag=$IMAGE_TAG 2>/dev/null || true
+              done
+              echo "✅ Cleanup completed"
+            fi
+          fi
+
+      - name: Delete untagged images
+        run: |
+          echo "🧹 Cleaning up untagged images..."
+
+          # Delete untagged images from server repository
+          UNTAGGED_SERVER=$(aws ecr list-images \
+            --repository-name ${{ env.ECR_REPOSITORY_SERVER }} \
+            --region ${{ env.AWS_REGION }} \
+            --filter "tagStatus=UNTAGGED" \
+            --query 'imageIds[*]' \
+            --output json || echo "[]")
+
+          if [ "$UNTAGGED_SERVER" != "[]" ] && [ -n "$UNTAGGED_SERVER" ]; then
+            echo "🗑️  Deleting untagged server images..."
+            aws ecr batch-delete-image \
+              --repository-name ${{ env.ECR_REPOSITORY_SERVER }} \
+              --region ${{ env.AWS_REGION }} \
+              --image-ids "$UNTAGGED_SERVER" || true
+          fi
+
+          # Delete untagged images from worker repository
+          UNTAGGED_WORKER=$(aws ecr list-images \
+            --repository-name ${{ env.ECR_REPOSITORY_WORKER }} \
+            --region ${{ env.AWS_REGION }} \
+            --filter "tagStatus=UNTAGGED" \
+            --query 'imageIds[*]' \
+            --output json || echo "[]")
+
+          if [ "$UNTAGGED_WORKER" != "[]" ] && [ -n "$UNTAGGED_WORKER" ]; then
+            echo "🗑️  Deleting untagged worker images..."
+            aws ecr batch-delete-image \
+              --repository-name ${{ env.ECR_REPOSITORY_WORKER }} \
+              --region ${{ env.AWS_REGION }} \
+              --image-ids "$UNTAGGED_WORKER" || true
+          fi
+
+          echo "✅ Untagged image cleanup completed"
+
+      - name: Summary
+        run: |
+          echo "📊 ECR Cleanup Summary:"
+          echo "======================"
+          echo "Server repository: ${{ env.ECR_REPOSITORY_SERVER }}"
+          echo "Worker repository: ${{ env.ECR_REPOSITORY_WORKER }}"
+          echo "Images kept per repo: ${{ env.KEEP_IMAGES }}"
+          echo "✅ Cleanup workflow completed"

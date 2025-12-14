@@ -1,0 +1,15 @@
+# docker-compose.build.yml
+# Fallback compose file for building images on EC2
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.build.yml up
+# When build is specified, it overrides the image directive
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
