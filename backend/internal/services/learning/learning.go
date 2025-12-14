@@ -107,9 +107,13 @@ func (ls *LearningService) GetFeedbackPatterns(ctx context.Context, orgID string
 	patterns["feedback_distribution"] = feedbackCounts
 	patterns["total_feedback"] = total
 
-	// Calculate acceptance rate
-	if accepted, ok := feedbackCounts["accepted"]; ok && total > 0 {
-		patterns["acceptance_rate"] = float64(accepted) / float64(total) * 100
+	// Calculate acceptance rate (only if we have feedback)
+	if total > 0 {
+		if accepted, ok := feedbackCounts["accepted"]; ok {
+			patterns["acceptance_rate"] = float64(accepted) / float64(total) * 100
+		} else {
+			patterns["acceptance_rate"] = 0.0
+		}
 	}
 
 	return patterns, nil

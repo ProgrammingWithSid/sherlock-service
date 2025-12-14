@@ -43,11 +43,16 @@ type RecordFeedbackRequest struct {
 // RecordFeedback records user feedback on a review comment
 // POST /api/v1/feedback
 func (h *FeedbackHandler) RecordFeedback(w http.ResponseWriter, r *http.Request) {
-	orgID := r.Header.Get("X-Org-ID")
-	if orgID == "" {
-		render.Status(r, http.StatusUnauthorized)
-		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
-		return
+	// Try to get org ID from context first (set by RequireOrgID middleware)
+	orgID, ok := r.Context().Value("org_id").(string)
+	if !ok || orgID == "" {
+		// Fallback to header
+		orgID = r.Header.Get("X-Org-ID")
+		if orgID == "" {
+			render.Status(r, http.StatusUnauthorized)
+			render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+			return
+		}
 	}
 
 	var req RecordFeedbackRequest
@@ -91,19 +96,32 @@ func (h *FeedbackHandler) RecordFeedback(w http.ResponseWriter, r *http.Request)
 // GetFeedbackPatterns returns feedback patterns for the organization
 // GET /api/v1/feedback/patterns
 func (h *FeedbackHandler) GetFeedbackPatterns(w http.ResponseWriter, r *http.Request) {
-	orgID := r.Header.Get("X-Org-ID")
-	if orgID == "" {
-		render.Status(r, http.StatusUnauthorized)
-		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
-		return
+	// Try to get org ID from context first (set by RequireOrgID middleware)
+	orgID, ok := r.Context().Value("org_id").(string)
+	if !ok || orgID == "" {
+		// Fallback to header
+		orgID = r.Header.Get("X-Org-ID")
+		if orgID == "" {
+			render.Status(r, http.StatusUnauthorized)
+			render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+			return
+		}
 	}
 
 	patterns, err := h.learningService.GetFeedbackPatterns(r.Context(), orgID)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get feedback patterns")
+		log.Error().Err(err).Str("org_id", orgID).Msg("Failed to get feedback patterns")
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": "Failed to get feedback patterns"})
 		return
+	}
+
+	// Return empty patterns if no feedback exists yet
+	if patterns == nil {
+		patterns = map[string]interface{}{
+			"feedback_distribution": map[string]int{},
+			"total_feedback":        0,
+		}
 	}
 
 	render.JSON(w, r, patterns)
@@ -112,11 +130,16 @@ func (h *FeedbackHandler) GetFeedbackPatterns(w http.ResponseWriter, r *http.Req
 // GetTeamPreferences returns learned preferences for the team
 // GET /api/v1/feedback/preferences
 func (h *FeedbackHandler) GetTeamPreferences(w http.ResponseWriter, r *http.Request) {
-	orgID := r.Header.Get("X-Org-ID")
-	if orgID == "" {
-		render.Status(r, http.StatusUnauthorized)
-		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
-		return
+	// Try to get org ID from context first (set by RequireOrgID middleware)
+	orgID, ok := r.Context().Value("org_id").(string)
+	if !ok || orgID == "" {
+		// Fallback to header
+		orgID = r.Header.Get("X-Org-ID")
+		if orgID == "" {
+			render.Status(r, http.StatusUnauthorized)
+			render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+			return
+		}
 	}
 
 	preferences, err := h.learningService.GetTeamPreferences(r.Context(), orgID)

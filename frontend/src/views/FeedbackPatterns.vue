@@ -16,7 +16,10 @@
         <!-- Feedback Distribution -->
         <div class="bg-white rounded-lg shadow p-6 mb-6">
           <h2 class="text-xl font-semibold mb-4">Feedback Distribution</h2>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div v-if="patterns?.total_feedback === 0" class="text-center py-8 text-gray-500">
+            No feedback collected yet. Start reviewing PRs and provide feedback on comments to see patterns here.
+          </div>
+          <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div
               v-for="(count, feedback) in patterns?.feedback_distribution"
               :key="feedback"
@@ -32,7 +35,7 @@
         </div>
 
         <!-- Acceptance Rate -->
-        <div v-if="patterns?.acceptance_rate !== undefined" class="bg-white rounded-lg shadow p-6 mb-6">
+        <div v-if="patterns?.acceptance_rate !== undefined && patterns?.total_feedback > 0" class="bg-white rounded-lg shadow p-6 mb-6">
           <h2 class="text-xl font-semibold mb-4">Acceptance Rate</h2>
           <div class="flex items-center">
             <div class="flex-1">
@@ -114,9 +117,31 @@ const loadData = async () => {
       feedbackAPI.getPatterns(),
       feedbackAPI.getPreferences(),
     ]);
-  } catch (err) {
+    
+    // Ensure patterns has default structure if empty
+    if (patterns.value && !patterns.value.feedback_distribution) {
+      patterns.value.feedback_distribution = {};
+    }
+    if (patterns.value && patterns.value.total_feedback === undefined) {
+      patterns.value.total_feedback = 0;
+    }
+  } catch (err: any) {
     console.error('Failed to load feedback data:', err);
-    error.value = 'Failed to load feedback patterns';
+    const errorMessage = err.response?.data?.error || err.message || 'Failed to load feedback patterns';
+    error.value = errorMessage;
+    
+    // Set empty defaults on error
+    patterns.value = {
+      feedback_distribution: {},
+      total_feedback: 0,
+    };
+    preferences.value = {
+      patterns: {
+        feedback_distribution: {},
+        total_feedback: 0,
+      },
+      learned_rules: [],
+    };
   } finally {
     loading.value = false;
   }
