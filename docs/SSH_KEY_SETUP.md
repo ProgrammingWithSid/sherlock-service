@@ -2,6 +2,16 @@
 
 ## Quick Answer
 
+### If you have an AWS EC2 .pem key file:
+
+```bash
+# On your local machine (wherever you saved the .pem file)
+cat /path/to/your-key.pem
+# Copy the entire output (including -----BEGIN and -----END lines)
+```
+
+**This is what you need!** The `.pem` file from AWS is your private key.
+
 ### If you already have an SSH key:
 
 ```bash
@@ -23,7 +33,56 @@ ssh-keygen -t rsa -b 4096 -C "github-actions-deploy"
 
 ## Detailed Steps
 
-### Option 1: Use Existing SSH Key (Recommended)
+### Option 1: Use AWS EC2 .pem Key File (Most Common) ⭐
+
+#### Step 1: Find your .pem file
+
+When you launched your EC2 instance, AWS gave you a `.pem` file to download. It's usually named like:
+- `my-key.pem`
+- `sherlock-key.pem`
+- `ec2-keypair.pem`
+
+**Common locations:**
+- `~/Downloads/my-key.pem`
+- `~/Desktop/my-key.pem`
+- `~/.ssh/my-key.pem`
+
+#### Step 2: Get the private key content
+
+```bash
+# Find your .pem file
+find ~ -name "*.pem" 2>/dev/null
+
+# Get the content
+cat /path/to/your-key.pem
+
+# Copy the ENTIRE output, including:
+# -----BEGIN RSA PRIVATE KEY-----
+# ... (all the content) ...
+# -----END RSA PRIVATE KEY-----
+```
+
+#### Step 3: Test it works
+
+```bash
+# Test SSH connection with .pem file
+ssh -i /path/to/your-key.pem ubuntu@YOUR_EC2_IP
+
+# If this works, your key is correct!
+```
+
+#### Step 4: Add to GitHub Secrets
+
+1. Go to: `Settings` → `Secrets and variables` → `Actions`
+2. Click: `New repository secret`
+3. Name: `EC2_SSH_KEY`
+4. Value: Paste the **ENTIRE** content from `cat your-key.pem`
+
+**Important**: Include the `-----BEGIN` and `-----END` lines!
+
+---
+
+### Option 2: Use Existing SSH Key (Recommended)
 
 #### Step 1: Check if you have an SSH key
 
@@ -133,7 +192,7 @@ cat ~/.ssh/id_rsa_github_actions
 - **Name**: `EC2_SSH_KEY`
 - **Value**: Paste your **ENTIRE** private key (the output from `cat ~/.ssh/id_rsa`)
 
-**Important**: 
+**Important**:
 - Include the `-----BEGIN` and `-----END` lines
 - Include all the content between them
 - Don't add extra spaces or newlines
@@ -204,9 +263,19 @@ b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
 
 ## Quick Reference
 
+### Get AWS .pem Key:
+```bash
+cat /path/to/your-key.pem
+```
+
 ### Get SSH Key:
 ```bash
 cat ~/.ssh/id_rsa
+```
+
+### Test SSH with .pem:
+```bash
+ssh -i /path/to/your-key.pem ubuntu@YOUR_EC2_IP
 ```
 
 ### Test SSH:
@@ -214,19 +283,31 @@ cat ~/.ssh/id_rsa
 ssh -i ~/.ssh/id_rsa ubuntu@YOUR_EC2_IP
 ```
 
-### Add to EC2:
-```bash
-ssh-copy-id -i ~/.ssh/id_rsa.pub ubuntu@YOUR_EC2_IP
-```
-
 ### Add to GitHub:
 1. Settings → Secrets → Actions → New secret
 2. Name: `EC2_SSH_KEY`
-3. Value: Paste private key (entire content)
+3. Value: Paste private key (entire content from .pem file)
 
 ---
 
-## Example: Complete Setup
+## Example: Complete Setup with AWS .pem
+
+```bash
+# 1. Find your .pem file
+find ~ -name "*.pem" 2>/dev/null
+# Example output: /Users/yourname/Downloads/sherlock-key.pem
+
+# 2. Test SSH connection
+ssh -i ~/Downloads/sherlock-key.pem ubuntu@YOUR_EC2_IP
+
+# 3. Get private key content for GitHub
+cat ~/Downloads/sherlock-key.pem
+# Copy entire output → GitHub Secrets → EC2_SSH_KEY
+
+# Done! GitHub Actions can now deploy to your EC2.
+```
+
+## Example: Complete Setup with New Key
 
 ```bash
 # 1. Generate key (if needed)
@@ -246,4 +327,3 @@ cat ~/.ssh/id_rsa_github
 ---
 
 **That's it!** Once the SSH key is in GitHub Secrets, your automated deployments will work! 🚀
-
