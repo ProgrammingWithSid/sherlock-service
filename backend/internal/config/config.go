@@ -60,7 +60,27 @@ type Config struct {
 }
 
 func Load() *Config {
-	_ = godotenv.Load()
+	// Try loading .env from multiple locations
+	// When running from backend/cmd/server, we need to go up to project root
+	envPaths := []string{
+		".env",           // Current directory
+		"../.env",        // One level up
+		"../../.env",     // Two levels up (backend/)
+		"../../../.env",  // Three levels up (project root from backend/cmd/server)
+	}
+	
+	loaded := false
+	for _, path := range envPaths {
+		if err := godotenv.Load(path); err == nil {
+			loaded = true
+			log.Debug().Str("path", path).Msg("Loaded .env file")
+			break
+		}
+	}
+	
+	if !loaded {
+		log.Debug().Msg("No .env file found, using environment variables and defaults")
+	}
 
 	return &Config{
 		Port:           getEnvInt("PORT", 3000),
