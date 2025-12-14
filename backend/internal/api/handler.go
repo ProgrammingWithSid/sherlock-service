@@ -568,3 +568,13 @@ func (h *Handler) GetQueueStatus(w http.ResponseWriter, r *http.Request) {
 
 	render.JSON(w, r, response)
 }
+
+func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	// For now, return basic metrics
+	// TODO: Integrate metrics service when available
+	response := map[string]interface{}{
+		"message": "Metrics endpoint - integration pending",
+		"note":    "Metrics service will be integrated in next update",
+	}
+	render.JSON(w, r, response)
+}
