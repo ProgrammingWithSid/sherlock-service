@@ -104,6 +104,13 @@
                 <p v-if="comment.fix" class="text-sm text-green-700 mt-2">
                   Fix: {{ comment.fix }}
                 </p>
+                <CommentFeedback
+                  v-if="review"
+                  :review-id="review.id"
+                  :comment-id="`${review.id}-${comment.file}-${comment.line}-${index}`"
+                  :file-path="comment.file"
+                  :line-number="comment.line"
+                />
               </div>
             </div>
           </div>
@@ -117,6 +124,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
+import CommentFeedback from '@/components/CommentFeedback.vue'
 import { useReviewsStore } from '@/stores/reviews'
 import type { Review, ReviewResult } from '@/types'
 

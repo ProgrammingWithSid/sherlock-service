@@ -56,6 +56,7 @@ const navItems = computed<NavItem[]>(() => {
     { name: 'Repositories', path: '/repositories' },
     { name: 'Reviews', path: '/reviews' },
     { name: 'Metrics', path: '/metrics' },
+    { name: 'Feedback', path: '/feedback' },
     { name: 'Settings', path: '/settings' },
   ]
   return items

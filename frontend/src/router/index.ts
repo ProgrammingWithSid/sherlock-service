@@ -68,6 +68,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Metrics.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/feedback',
+    name: 'feedback-patterns',
+    component: () => import('@/views/FeedbackPatterns.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

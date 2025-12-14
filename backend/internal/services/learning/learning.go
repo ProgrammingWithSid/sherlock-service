@@ -78,7 +78,7 @@ func (ls *LearningService) RecordFeedback(ctx context.Context, feedback ReviewFe
 func (ls *LearningService) GetFeedbackPatterns(ctx context.Context, orgID string) (map[string]interface{}, error) {
 	// Analyze accepted vs dismissed patterns
 	query := `
-		SELECT 
+		SELECT
 			feedback,
 			COUNT(*) as count,
 			COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as percentage
@@ -162,4 +162,3 @@ func (ls *LearningService) GetTeamPreferences(ctx context.Context, orgID string)
 
 	return preferences, nil
 }
-

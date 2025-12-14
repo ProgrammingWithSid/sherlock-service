@@ -129,4 +129,3 @@ func (h *FeedbackHandler) GetTeamPreferences(w http.ResponseWriter, r *http.Requ
 
 	render.JSON(w, r, preferences)
 }
-
