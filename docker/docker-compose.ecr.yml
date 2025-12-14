@@ -80,7 +80,7 @@ services:
     restart: unless-stopped
 
   rust-indexer:
-    image: ${ECR_REGISTRY:-637423495478.dkr.ecr.ap-south-1.amazonaws.com}/sherlock-service/indexer:latest
+    image: ${ECR_REGISTRY:-637423495478.dkr.ecr.ap-south-1.amazonaws.com}/sherlock-indexer:latest
     ports:
       - "8081:8081"
     mem_limit: 256m

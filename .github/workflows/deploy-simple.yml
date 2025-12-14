@@ -11,7 +11,7 @@ env:
   EC2_USER: ubuntu
   ECR_REPOSITORY_SERVER: sherlock-service/server
   ECR_REPOSITORY_WORKER: sherlock-service/worker
-  ECR_REPOSITORY_INDEXER: sherlock-service/indexer
+  ECR_REPOSITORY_INDEXER: sherlock-indexer
   COMPOSE_FILE: docker/docker-compose.ecr.yml
 
 jobs:
