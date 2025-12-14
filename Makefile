@@ -111,7 +111,9 @@ deploy-build:
 # Setup ECR login on EC2 (one-time setup)
 setup-ecr-login:
 	@echo "🔐 Setting up ECR login on EC2..."
-	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && bash scripts/ecr-login.sh"
+	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
+		git fetch origin && git reset --hard origin/main && \
+		bash scripts/ecr-login.sh"
 
 # Manual ECR cleanup trigger
 cleanup-ecr:
