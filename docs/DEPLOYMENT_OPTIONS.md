@@ -228,4 +228,3 @@ Do you have enterprise customers?
 4. **Scale**: Move to ECS only when needed
 
 **Bottom line**: Don't over-engineer. Start simple, scale when needed! 🚀
-

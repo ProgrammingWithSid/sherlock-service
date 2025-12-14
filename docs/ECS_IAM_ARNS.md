@@ -8,7 +8,7 @@ This guide provides the ARNs you need to specify for ECS resources in your IAM p
 
 Based on your configuration:
 - **Cluster**: `sherlock-cluster`
-- **Services**: 
+- **Services**:
   - `sherlock-server`
   - `sherlock-worker`
 - **Task Definitions**:
@@ -221,7 +221,6 @@ aws ecs describe-clusters --clusters sherlock-cluster --query 'clusters[0].clust
 
 ---
 
-**Last Updated**: 2024-12-13  
-**Cluster Name**: `sherlock-cluster`  
+**Last Updated**: 2024-12-13
+**Cluster Name**: `sherlock-cluster`
 **Services**: `sherlock-server`, `sherlock-worker`
-

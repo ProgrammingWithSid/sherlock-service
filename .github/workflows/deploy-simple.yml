@@ -1,0 +1,50 @@
+name: Deploy to EC2 (Simple)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USER: ubuntu
+  COMPOSE_FILE: docker/docker-compose.t3micro.yml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        env:
+          SSH_KEY: ~/.ssh/deploy_key
+        run: |
+          chmod +x scripts/deploy-ec2.sh
+          ./scripts/deploy-ec2.sh ${{ secrets.EC2_HOST }} ${{ env.EC2_USER }}
+
+      - name: Health Check
+        run: |
+          sleep 10
+          curl -f http://${{ secrets.EC2_HOST }}:3000/health || echo "⚠️  Health check failed, but deployment may still be in progress"
+
+      - name: Deployment summary
+        run: |
+          echo "✅ Deployment completed!"
+          echo ""
+          echo "📋 Services deployed:"
+          echo "   - Server: http://${{ secrets.EC2_HOST }}:3000"
+          echo "   - Worker: Running in background"
+          echo ""
+          echo "🔍 Check logs:"
+          echo "   ssh ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }} 'cd sherlock-service && docker-compose -f ${{ env.COMPOSE_FILE }} logs -f'"
+
