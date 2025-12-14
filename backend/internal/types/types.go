@@ -89,6 +89,7 @@ type Organization struct {
 	StripeCustomerID     *string   `json:"stripe_customer_id,omitempty" db:"stripe_customer_id"`
 	StripeSubscriptionID *string   `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
 	PlanActivatedAt      *time.Time `json:"plan_activated_at,omitempty" db:"plan_activated_at"`
+	GlobalRules          string    `json:"global_rules" db:"global_rules"` // JSON array of strings
 	CreatedAt            time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at" db:"updated_at"`
 }

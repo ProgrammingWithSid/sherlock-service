@@ -144,6 +144,10 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 			apiHandler := api.NewHandler(db, reviewQueue, cfg, metricsService)
 			apiHandler.RegisterRoutes(r)
 
+			// Organization routes (for managing global rules)
+			orgHandler := api.NewOrganizationHandler(db)
+			orgHandler.RegisterRoutes(r)
+
 			// Learning/Feedback routes
 			learningService := learning.NewLearningService(db)
 			feedbackHandler := api.NewFeedbackHandler(learningService)

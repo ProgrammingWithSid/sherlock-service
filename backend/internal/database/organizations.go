@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,17 +15,17 @@ func (db *DB) CreateOrganization(name string, slug string) (*types.Organization,
 	now := time.Now()
 
 	query := `
-		INSERT INTO organizations (id, name, slug, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO organizations (id, name, slug, global_rules, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, name, slug, plan, stripe_customer_id, stripe_subscription_id,
-		          plan_activated_at, created_at, updated_at
+		          plan_activated_at, global_rules, created_at, updated_at
 	`
 
 	org := &types.Organization{}
-	err := db.conn.QueryRow(query, id, name, slug, now, now).Scan(
+	err := db.conn.QueryRow(query, id, name, slug, "[]", now, now).Scan(
 		&org.ID, &org.Name, &org.Slug, &org.Plan,
 		&org.StripeCustomerID, &org.StripeSubscriptionID,
-		&org.PlanActivatedAt, &org.CreatedAt, &org.UpdatedAt,
+		&org.PlanActivatedAt, &org.GlobalRules, &org.CreatedAt, &org.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create organization: %w", err)
@@ -36,7 +37,7 @@ func (db *DB) CreateOrganization(name string, slug string) (*types.Organization,
 func (db *DB) GetOrganizationByID(id string) (*types.Organization, error) {
 	query := `
 		SELECT id, name, slug, plan, stripe_customer_id, stripe_subscription_id,
-		       plan_activated_at, created_at, updated_at
+		       plan_activated_at, global_rules, created_at, updated_at
 		FROM organizations
 		WHERE id = $1
 	`
@@ -45,7 +46,7 @@ func (db *DB) GetOrganizationByID(id string) (*types.Organization, error) {
 	err := db.conn.QueryRow(query, id).Scan(
 		&org.ID, &org.Name, &org.Slug, &org.Plan,
 		&org.StripeCustomerID, &org.StripeSubscriptionID,
-		&org.PlanActivatedAt, &org.CreatedAt, &org.UpdatedAt,
+		&org.PlanActivatedAt, &org.GlobalRules, &org.CreatedAt, &org.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("organization not found")
@@ -60,7 +61,7 @@ func (db *DB) GetOrganizationByID(id string) (*types.Organization, error) {
 func (db *DB) GetOrganizationBySlug(slug string) (*types.Organization, error) {
 	query := `
 		SELECT id, name, slug, plan, stripe_customer_id, stripe_subscription_id,
-		       plan_activated_at, created_at, updated_at
+		       plan_activated_at, global_rules, created_at, updated_at
 		FROM organizations
 		WHERE slug = $1
 	`
@@ -69,7 +70,7 @@ func (db *DB) GetOrganizationBySlug(slug string) (*types.Organization, error) {
 	err := db.conn.QueryRow(query, slug).Scan(
 		&org.ID, &org.Name, &org.Slug, &org.Plan,
 		&org.StripeCustomerID, &org.StripeSubscriptionID,
-		&org.PlanActivatedAt, &org.CreatedAt, &org.UpdatedAt,
+		&org.PlanActivatedAt, &org.GlobalRules, &org.CreatedAt, &org.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("organization not found")
@@ -130,11 +131,33 @@ func (db *DB) GetRepoCount(orgID string) (int, error) {
 	return count, nil
 }
 
+// UpdateOrganizationGlobalRules updates global rules for an organization
+func (db *DB) UpdateOrganizationGlobalRules(orgID string, rules []string) error {
+	// Convert rules to JSON
+	rulesJSON, err := json.Marshal(rules)
+	if err != nil {
+		return fmt.Errorf("failed to marshal rules: %w", err)
+	}
+
+	query := `
+		UPDATE organizations
+		SET global_rules = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+
+	_, err = db.conn.Exec(query, string(rulesJSON), orgID)
+	if err != nil {
+		return fmt.Errorf("failed to update global rules: %w", err)
+	}
+
+	return nil
+}
+
 // ListOrganizationsByToken returns all organizations that have installations with the given token
 func (db *DB) ListOrganizationsByToken(token string) ([]*types.Organization, error) {
 	query := `
 		SELECT DISTINCT o.id, o.name, o.slug, o.plan, o.stripe_customer_id, o.stripe_subscription_id,
-		       o.plan_activated_at, o.created_at, o.updated_at
+		       o.plan_activated_at, o.global_rules, o.created_at, o.updated_at
 		FROM organizations o
 		INNER JOIN github_installations gi ON o.id = gi.org_id
 		WHERE gi.token = $1
@@ -153,7 +176,7 @@ func (db *DB) ListOrganizationsByToken(token string) ([]*types.Organization, err
 		err := rows.Scan(
 			&org.ID, &org.Name, &org.Slug, &org.Plan,
 			&org.StripeCustomerID, &org.StripeSubscriptionID,
-			&org.PlanActivatedAt, &org.CreatedAt, &org.UpdatedAt,
+			&org.PlanActivatedAt, &org.GlobalRules, &org.CreatedAt, &org.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan organization: %w", err)
@@ -172,7 +195,7 @@ func (db *DB) ListOrganizationsByToken(token string) ([]*types.Organization, err
 func (db *DB) ListAllOrganizations() ([]*types.Organization, error) {
 	query := `
 		SELECT DISTINCT o.id, o.name, o.slug, o.plan, o.stripe_customer_id, o.stripe_subscription_id,
-		       o.plan_activated_at, o.created_at, o.updated_at
+		       o.plan_activated_at, o.global_rules, o.created_at, o.updated_at
 		FROM organizations o
 		INNER JOIN github_installations gi ON o.id = gi.org_id
 		ORDER BY o.created_at DESC
@@ -190,7 +213,7 @@ func (db *DB) ListAllOrganizations() ([]*types.Organization, error) {
 		err := rows.Scan(
 			&org.ID, &org.Name, &org.Slug, &org.Plan,
 			&org.StripeCustomerID, &org.StripeSubscriptionID,
-			&org.PlanActivatedAt, &org.CreatedAt, &org.UpdatedAt,
+			&org.PlanActivatedAt, &org.GlobalRules, &org.CreatedAt, &org.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan organization: %w", err)

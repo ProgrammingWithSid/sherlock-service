@@ -59,6 +59,7 @@ func (db *DB) migrate() error {
 			stripe_customer_id VARCHAR(255),
 			stripe_subscription_id VARCHAR(255),
 			plan_activated_at TIMESTAMP,
+			global_rules TEXT DEFAULT '[]',
 			created_at TIMESTAMP DEFAULT NOW(),
 			updated_at TIMESTAMP DEFAULT NOW()
 		)`,
@@ -134,6 +135,17 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_org ON github_installations(org_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_id ON github_installations(installation_id)`,
+		// Migration: Add global_rules column if it doesn't exist (for existing databases)
+		`DO $$ 
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.columns 
+				WHERE table_name = 'organizations' AND column_name = 'global_rules'
+			) THEN
+				ALTER TABLE organizations ADD COLUMN global_rules TEXT DEFAULT '[]';
+				UPDATE organizations SET global_rules = '[]' WHERE global_rules IS NULL;
+			END IF;
+		END $$;`,
 		// Code symbols table for codebase indexing
 		`CREATE TABLE IF NOT EXISTS code_symbols (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

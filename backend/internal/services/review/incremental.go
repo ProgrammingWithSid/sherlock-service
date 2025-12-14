@@ -30,11 +30,11 @@ func NewIncrementalReviewService(
 ) *IncrementalReviewService {
 	rustIndexer := indexer.NewRustIndexerService(rustIndexerURL)
 	useRust := rustIndexer.IsEnabled()
-	
+
 	if useRust {
 		log.Info().Str("url", rustIndexerURL).Msg("Rust indexer enabled for incremental reviews")
 	}
-	
+
 	return &IncrementalReviewService{
 		gitService:     gitService,
 		reviewCache:    reviewCache,
@@ -106,7 +106,7 @@ func (irs *IncrementalReviewService) ReviewDiff(
 		chunkHashes := make([]string, 0)
 		for _, hunk := range diff.Hunks {
 			var hash string
-			
+
 			// Try rust-indexer first if enabled
 			if irs.useRustIndexer && irs.rustIndexer != nil {
 				rustHash, err := irs.rustIndexer.GetChunkHash(
@@ -131,7 +131,7 @@ func (irs *IncrementalReviewService) ReviewDiff(
 				// Simple hash based on file path and line range
 				hash = fmt.Sprintf("%s:%d-%d", filePath, hunk.NewStart, hunk.NewStart+hunk.NewLines)
 			}
-			
+
 			chunkHashes = append(chunkHashes, hash)
 		}
 
