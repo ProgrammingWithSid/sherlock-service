@@ -21,6 +21,13 @@
         @connected="handleRepoConnected"
       />
 
+      <RepoConfigModal
+        :show="showConfigModal"
+        :repo="selectedRepo"
+        @close="showConfigModal = false"
+        @saved="handleConfigSaved"
+      />
+
       <div v-if="reposStore.loading" class="text-center py-12">
         <p class="text-gray-500">Loading repositories...</p>
       </div>
@@ -91,7 +98,12 @@
                 >
                   {{ repo.is_active ? 'Pause' : 'Activate' }}
                 </button>
-                <button class="text-blue-600 hover:text-blue-900 mr-4">Configure</button>
+                <button
+                  @click="handleConfigure(repo)"
+                  class="text-blue-600 hover:text-blue-900 mr-4"
+                >
+                  Configure
+                </button>
                 <button class="text-red-600 hover:text-red-900">Remove</button>
               </td>
             </tr>
@@ -104,6 +116,8 @@
 
 <script setup lang="ts">
 import ConnectRepoModal from '@/components/ConnectRepoModal.vue'
+import RepoConfigModal from '@/components/RepoConfigModal.vue'
+import type { Repository } from '@/types'
 import NavBar from '@/components/NavBar.vue'
 import { useRepositoriesStore } from '@/stores/repositories'
 import { onMounted, ref } from 'vue'
@@ -121,6 +135,15 @@ const handleToggleActive = async (repoId: string, currentStatus: boolean): Promi
 }
 
 const handleRepoConnected = (): void => {
+  reposStore.fetchRepositories()
+}
+
+const handleConfigure = (repo: Repository): void => {
+  selectedRepo.value = repo
+  showConfigModal.value = true
+}
+
+const handleConfigSaved = (): void => {
   reposStore.fetchRepositories()
 }
 

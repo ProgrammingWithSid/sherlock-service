@@ -46,10 +46,10 @@
       </button>
 
       <!-- Info about org rules -->
-      <div v-if="showOrgInfo && orgRules.length > 0" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+      <div v-if="showOrgInfo && orgRules && orgRules.length > 0" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <p class="text-sm text-blue-800">
           <strong>Organization Rules:</strong> These rules are inherited from your organization settings.
-          {{ localRules.length > 0 ? 'You can override them with repository-specific rules.' : 'Add rules below to override them for this repository.' }}
+          {{ localRules.length > 0 && localRules[0] !== '' ? 'You can override them with repository-specific rules.' : 'Add rules below to override them for this repository.' }}
         </p>
         <div class="mt-2 space-y-1">
           <div
@@ -144,4 +144,3 @@ const cancel = () => {
   emit('cancel')
 }
 </script>
-

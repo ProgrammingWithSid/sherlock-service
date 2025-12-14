@@ -28,4 +28,3 @@ export const organizationsAPI = {
     return response.rules
   },
 }
-

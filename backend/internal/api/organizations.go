@@ -38,7 +38,7 @@ type GlobalRulesResponse struct {
 // GetGlobalRules gets global rules for an organization
 func (h *OrganizationHandler) GetGlobalRules(w http.ResponseWriter, r *http.Request) {
 	orgID := chi.URLParam(r, "id")
-	
+
 	// Verify user has access to this organization
 	userRole, _ := r.Context().Value("user_role").(string)
 	userOrgID, _ := r.Context().Value("org_id").(string)
@@ -72,7 +72,7 @@ func (h *OrganizationHandler) GetGlobalRules(w http.ResponseWriter, r *http.Requ
 // UpdateGlobalRules updates global rules for an organization
 func (h *OrganizationHandler) UpdateGlobalRules(w http.ResponseWriter, r *http.Request) {
 	orgID := chi.URLParam(r, "id")
-	
+
 	// Verify user has access to this organization
 	userRole, _ := r.Context().Value("user_role").(string)
 	userOrgID, _ := r.Context().Value("org_id").(string)
@@ -126,4 +126,3 @@ func (h *OrganizationHandler) UpdateGlobalRules(w http.ResponseWriter, r *http.R
 
 	render.JSON(w, r, GlobalRulesResponse{Rules: req.Rules})
 }
-

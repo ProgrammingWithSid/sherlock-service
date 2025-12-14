@@ -136,10 +136,10 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_installations_org ON github_installations(org_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_id ON github_installations(installation_id)`,
 		// Migration: Add global_rules column if it doesn't exist (for existing databases)
-		`DO $$ 
+		`DO $$
 		BEGIN
 			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.columns 
+				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'organizations' AND column_name = 'global_rules'
 			) THEN
 				ALTER TABLE organizations ADD COLUMN global_rules TEXT DEFAULT '[]';
