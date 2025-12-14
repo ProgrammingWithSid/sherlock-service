@@ -19,6 +19,12 @@ WORKDIR /app/backend
 # Install git for dependencies
 RUN apk add --no-cache git
 
+# Set Go environment variables to limit cache usage
+ENV GOCACHE=/tmp/go-cache
+ENV GOTMPDIR=/tmp/go-tmp
+ENV GOOS=linux
+ENV CGO_ENABLED=0
+
 # Copy go mod files
 COPY backend/go.mod ./
 COPY backend/go.sum ./
@@ -27,11 +33,14 @@ COPY backend/go.sum ./
 COPY backend/ .
 
 # Generate go.sum and download dependencies
-RUN go mod tidy
-RUN go mod download
+RUN go mod tidy && go mod download
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ../server ./cmd/server
+
+# Clean up Go build cache and temp files after build to save space
+RUN go clean -cache -testcache || true && \
+    rm -rf /tmp/go-build* /tmp/go-cache /tmp/go-tmp || true
 
 # Final stage
 FROM alpine:latest

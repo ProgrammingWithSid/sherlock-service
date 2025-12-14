@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/sherlock/service/internal/services/cache"
 	"github.com/sherlock/service/internal/services/git"
+	"github.com/sherlock/service/internal/types"
 )
 
 // IncrementalReviewService provides incremental review capabilities
@@ -110,7 +111,9 @@ func (irs *IncrementalReviewService) ReviewDiff(
 		for _, hash := range fileInfo.ChunkHashes {
 			cached, found := irs.reviewCache.GetCachedReview(repoID, fileInfo.Path, hash)
 			if found {
-				cachedResults = append(cachedResults, cached)
+				// Convert types.ReviewResult to ReviewResult
+				converted := convertTypesReviewResultToReviewResult(cached)
+				cachedResults = append(cachedResults, converted)
 			} else {
 				hasNewChunks = true
 			}
@@ -172,6 +175,45 @@ func (irs *IncrementalReviewService) ReviewDiff(
 		Msg("Incremental review completed")
 
 	return mergedResult, nil
+}
+
+// convertTypesReviewResultToReviewResult converts types.ReviewResult to ReviewResult
+func convertTypesReviewResultToReviewResult(tr *types.ReviewResult) *ReviewResult {
+	if tr == nil {
+		return nil
+	}
+
+	// Convert comments
+	comments := make([]ReviewComment, 0, len(tr.Comments))
+	for _, tc := range tr.Comments {
+		comments = append(comments, ReviewComment{
+			File:     tc.File,
+			Line:     tc.Line,
+			Severity: string(tc.Severity),
+			Category: string(tc.Category),
+			Message:  tc.Message,
+			Fix:      tc.Fix,
+		})
+	}
+
+	// Convert recommendation
+	recommendation := "APPROVE"
+	if tr.Recommendation == types.RecommendationRequestChanges {
+		recommendation = "REQUEST_CHANGES"
+	} else if tr.Recommendation == types.RecommendationComment {
+		recommendation = "COMMENT"
+	}
+
+	return &ReviewResult{
+		Summary: fmt.Sprintf("Cached review: %d issues found", tr.Summary.TotalIssues),
+		Stats: ReviewStats{
+			Errors:      tr.Summary.Errors,
+			Warnings:    tr.Summary.Warnings,
+			Suggestions: tr.Summary.Suggestions,
+		},
+		Comments:       comments,
+		Recommendation: recommendation,
+	}
 }
 
 // computeHunkHash computes a hash for a hunk (simplified)
