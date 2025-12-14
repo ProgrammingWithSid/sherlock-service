@@ -28,17 +28,23 @@ CREATE INDEX IF NOT EXISTS idx_code_symbols_deps ON code_symbols USING GIN(depen
 CREATE TABLE IF NOT EXISTS review_feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     review_id UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
-    comment_id TEXT, -- External comment ID from GitHub/GitLab
+    comment_id TEXT NOT NULL, -- Comment identifier
+    file_path TEXT NOT NULL, -- File path where comment was made
+    line_number INT NOT NULL, -- Line number of the comment
+    feedback TEXT NOT NULL, -- 'accepted', 'dismissed', 'fixed'
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    action TEXT NOT NULL, -- 'accepted', 'dismissed', 'disputed', 'helpful', 'not_helpful'
-    reason TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(review_id, comment_id)
 );
 
 -- Indexes for review_feedback
 CREATE INDEX IF NOT EXISTS idx_review_feedback_review ON review_feedback(review_id);
 CREATE INDEX IF NOT EXISTS idx_review_feedback_user ON review_feedback(user_id);
-CREATE INDEX IF NOT EXISTS idx_review_feedback_action ON review_feedback(action);
+CREATE INDEX IF NOT EXISTS idx_review_feedback_org ON review_feedback(org_id);
+CREATE INDEX IF NOT EXISTS idx_review_feedback_file_line ON review_feedback(file_path, line_number);
+CREATE INDEX IF NOT EXISTS idx_review_feedback_feedback ON review_feedback(feedback);
 CREATE INDEX IF NOT EXISTS idx_review_feedback_created ON review_feedback(created_at);
 
 -- Table for review cache (for incremental reviews)
@@ -70,6 +76,12 @@ $$ language 'plpgsql';
 -- Trigger to update updated_at on code_symbols
 CREATE TRIGGER update_code_symbols_updated_at
     BEFORE UPDATE ON code_symbols
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger to update updated_at on review_feedback
+CREATE TRIGGER update_review_feedback_updated_at
+    BEFORE UPDATE ON review_feedback
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
