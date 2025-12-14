@@ -29,5 +29,3 @@ defineProps<{
   change?: number
 }>()
 </script>
-
-

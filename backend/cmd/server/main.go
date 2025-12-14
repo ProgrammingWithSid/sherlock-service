@@ -19,6 +19,7 @@ import (
 	"github.com/sherlock/service/internal/config"
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/queue"
+	"github.com/sherlock/service/internal/services/learning"
 	"github.com/sherlock/service/internal/services/metrics"
 	"github.com/sherlock/service/internal/workers"
 )
@@ -142,6 +143,11 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 		r.Route("/", func(r chi.Router) {
 			apiHandler := api.NewHandler(db, reviewQueue, cfg, metricsService)
 			apiHandler.RegisterRoutes(r)
+
+			// Learning/Feedback routes
+			learningService := learning.NewLearningService(db)
+			feedbackHandler := api.NewFeedbackHandler(learningService)
+			feedbackHandler.RegisterRoutes(r)
 
 			// Admin routes (requires super admin)
 			adminHandler := api.NewAdminHandler(db)

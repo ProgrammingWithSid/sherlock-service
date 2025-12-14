@@ -24,4 +24,3 @@ export interface MetricsResponse {
 export async function getMetrics(): Promise<MetricsResponse> {
   return apiClient.get<MetricsResponse>('/api/v1/metrics');
 }
-
