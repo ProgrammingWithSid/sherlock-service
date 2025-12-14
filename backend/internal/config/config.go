@@ -125,12 +125,24 @@ func (c *Config) Validate() error {
 		errors = append(errors, "AI_PROVIDER must be 'openai' or 'claude'")
 	}
 
-	if c.AIProvider == "openai" && c.OpenAIAPIKey == "" {
-		errors = append(errors, "OPENAI_API_KEY is required when AI_PROVIDER is 'openai'")
-	}
+	// Only require API keys in production - in development, they're only needed when reviews run
+	if c.Environment == "production" {
+		if c.AIProvider == "openai" && c.OpenAIAPIKey == "" {
+			errors = append(errors, "OPENAI_API_KEY is required when AI_PROVIDER is 'openai'")
+		}
 
-	if c.AIProvider == "claude" && c.ClaudeAPIKey == "" {
-		errors = append(errors, "CLAUDE_API_KEY is required when AI_PROVIDER is 'claude'")
+		if c.AIProvider == "claude" && c.ClaudeAPIKey == "" {
+			errors = append(errors, "CLAUDE_API_KEY is required when AI_PROVIDER is 'claude'")
+		}
+	} else {
+		// In development, log a warning if API keys are missing
+		if c.AIProvider == "openai" && c.OpenAIAPIKey == "" {
+			log.Warn().Msg("OPENAI_API_KEY not set - reviews will fail when triggered")
+		}
+
+		if c.AIProvider == "claude" && c.ClaudeAPIKey == "" {
+			log.Warn().Msg("CLAUDE_API_KEY not set - reviews will fail when triggered")
+		}
 	}
 
 	if c.Port <= 0 || c.Port > 65535 {
