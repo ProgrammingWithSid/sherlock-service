@@ -176,40 +176,30 @@ func (cs *ChunkyyyService) ExtractDependencies(ctx context.Context, filePath str
 
 // GetChunkHash gets the hash for a specific chunk (for caching)
 func (cs *ChunkyyyService) GetChunkHash(ctx context.Context, filePath string, startLine int, endLine int) (string, error) {
-	chunks, err := cs.ExtractSymbols(ctx, filePath)
+	// Call chunkyyy directly for the specific line range to get the hash
+	script := cs.generateHashScript(filePath, startLine, endLine)
+	scriptPath := filepath.Join(os.TempDir(), fmt.Sprintf("chunkyyy-hash-%d.js", time.Now().Unix()))
+	defer os.Remove(scriptPath)
+
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		return "", err
+	}
+
+	cmd := exec.CommandContext(ctx, cs.nodePath, scriptPath, cs.repoPath, filePath)
+	cmd.Dir = cs.repoPath
+
+	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
 
-	// Find chunk that matches the line range
-	for _, chunk := range chunks {
-		if chunk.StartLine <= startLine && chunk.EndLine >= endLine {
-			// Use chunkyyy's hash if available
-			script := cs.generateHashScript(filePath, chunk.StartLine, chunk.EndLine)
-			scriptPath := filepath.Join(os.TempDir(), fmt.Sprintf("chunkyyy-hash-%d.js", time.Now().Unix()))
-			defer os.Remove(scriptPath)
-
-			if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
-				return "", err
-			}
-
-			cmd := exec.CommandContext(ctx, cs.nodePath, scriptPath, cs.repoPath, filePath)
-			cmd.Dir = cs.repoPath
-
-			output, err := cmd.Output()
-			if err != nil {
-				return "", err
-			}
-
-			hash := string(bytes.TrimSpace(output))
-			if hash != "" {
-				return hash, nil
-			}
-		}
+	hash := string(bytes.TrimSpace(output))
+	if hash != "" {
+		return hash, nil
 	}
 
 	// Fallback: compute hash from content
-	return "", fmt.Errorf("chunk not found for range %d-%d", startLine, endLine)
+	return "", fmt.Errorf("failed to get chunk hash for range %d-%d", startLine, endLine)
 }
 
 // buildSignature builds a function signature from chunk metadata

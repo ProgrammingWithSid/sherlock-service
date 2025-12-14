@@ -9,7 +9,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/sherlock/service/internal/database"
-	"github.com/sherlock/service/internal/types"
 )
 
 // CodeSymbol represents a code symbol (function, class, variable, etc.)
@@ -149,7 +148,7 @@ func (ci *CodebaseIndexer) GetRelatedCode(ctx context.Context, repoID string, fi
 
 	// Find symbols that match dependencies
 	related := make([]CodeSymbol, 0)
-	for _, dep := range deps {
+	for range deps {
 		// TODO: Query database for symbols matching dep.Name
 		// For now, return empty
 	}

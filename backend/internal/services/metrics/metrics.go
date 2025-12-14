@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -37,7 +38,7 @@ type ReviewMetrics struct {
 // RecordReview records a review metric
 func (ms *MetricsService) RecordReview(duration time.Duration, success bool, usedCache bool, incremental bool) {
 	key := "metrics:reviews"
-	
+
 	// Increment counters
 	pipe := ms.redis.Pipeline()
 	pipe.Incr(ms.ctx, key+":total")
@@ -56,17 +57,17 @@ func (ms *MetricsService) RecordReview(duration time.Duration, success bool, use
 	} else {
 		pipe.Incr(ms.ctx, key+":full")
 	}
-	
+
 	// Record duration
 	durationMs := duration.Milliseconds()
 	pipe.ZAdd(ms.ctx, key+":durations", &redis.Z{
 		Score:  float64(time.Now().Unix()),
 		Member: durationMs,
 	})
-	
+
 	// Keep only last 1000 durations
 	pipe.ZRemRangeByRank(ms.ctx, key+":durations", 0, -1001)
-	
+
 	if _, err := pipe.Exec(ms.ctx); err != nil {
 		log.Warn().Err(err).Msg("Failed to record review metrics")
 	}
@@ -75,7 +76,7 @@ func (ms *MetricsService) RecordReview(duration time.Duration, success bool, use
 // GetReviewMetrics gets review metrics
 func (ms *MetricsService) GetReviewMetrics() (*ReviewMetrics, error) {
 	key := "metrics:reviews"
-	
+
 	pipe := ms.redis.Pipeline()
 	totalCmd := pipe.Get(ms.ctx, key+":total")
 	successCmd := pipe.Get(ms.ctx, key+":success")
@@ -85,13 +86,13 @@ func (ms *MetricsService) GetReviewMetrics() (*ReviewMetrics, error) {
 	incrementalCmd := pipe.Get(ms.ctx, key+":incremental")
 	fullCmd := pipe.Get(ms.ctx, key+":full")
 	durationsCmd := pipe.ZRange(ms.ctx, key+":durations", -1000, -1)
-	
+
 	if _, err := pipe.Exec(ms.ctx); err != nil && err != redis.Nil {
 		return nil, err
 	}
-	
+
 	metrics := &ReviewMetrics{}
-	
+
 	if val, err := totalCmd.Int64(); err == nil {
 		metrics.TotalReviews = val
 	}
@@ -113,19 +114,23 @@ func (ms *MetricsService) GetReviewMetrics() (*ReviewMetrics, error) {
 	if val, err := fullCmd.Int64(); err == nil {
 		metrics.FullReviews = val
 	}
-	
+
 	// Calculate average duration
 	durations, err := durationsCmd.Result()
 	if err == nil && len(durations) > 0 {
 		var sum int64
+		count := 0
 		for _, d := range durations {
-			if val, ok := d.(int64); ok {
+			if val, err := strconv.ParseInt(d, 10, 64); err == nil {
 				sum += val
+				count++
 			}
 		}
-		metrics.AverageDuration = float64(sum) / float64(len(durations))
+		if count > 0 {
+			metrics.AverageDuration = float64(sum) / float64(count)
+		}
 	}
-	
+
 	return metrics, nil
 }
 
@@ -135,12 +140,12 @@ func (ms *MetricsService) GetCacheHitRate() float64 {
 	if err != nil {
 		return 0
 	}
-	
+
 	total := metrics.CacheHits + metrics.CacheMisses
 	if total == 0 {
 		return 0
 	}
-	
+
 	return float64(metrics.CacheHits) / float64(total) * 100
 }
 
@@ -150,11 +155,11 @@ func (ms *MetricsService) GetSuccessRate() float64 {
 	if err != nil {
 		return 0
 	}
-	
+
 	if metrics.TotalReviews == 0 {
 		return 0
 	}
-	
+
 	return float64(metrics.SuccessfulReviews) / float64(metrics.TotalReviews) * 100
 }
 
@@ -170,7 +175,6 @@ func (ms *MetricsService) ResetMetrics() error {
 		"metrics:reviews:full",
 		"metrics:reviews:durations",
 	}
-	
+
 	return ms.redis.Del(ms.ctx, keys...).Err()
 }
-

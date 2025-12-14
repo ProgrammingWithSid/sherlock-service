@@ -74,8 +74,15 @@ func (ei *EnhancedIndexer) GetSymbolDependencies(ctx context.Context, filePath s
 
 	// Find the symbol
 	for _, symbol := range symbols {
-		if symbol.Name == symbolName || symbol.QualifiedName == symbolName {
-			return symbol.Dependencies, nil
+		if symbol.SymbolName == symbolName {
+			// Convert []string dependencies to []Dependency
+			deps := make([]Dependency, 0, len(symbol.Dependencies))
+			for _, depName := range symbol.Dependencies {
+				deps = append(deps, Dependency{
+					Name: depName,
+				})
+			}
+			return deps, nil
 		}
 	}
 
