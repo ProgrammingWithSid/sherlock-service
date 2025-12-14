@@ -94,5 +94,6 @@ Makefile
 docs/
 
 # Scripts and documentation
-*.sh
+# *.sh - Allow deployment scripts
+# scripts/deploy-ec2.sh - Required for CI/CD
 *.md
