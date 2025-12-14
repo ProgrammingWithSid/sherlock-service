@@ -122,6 +122,16 @@ setup-ecr-login:
 		git fetch origin && git reset --hard origin/main && \
 		bash scripts/ecr-login.sh"
 
+# Check ECR repository status
+check-ecr:
+	@echo "🔍 Checking ECR repositories..."
+	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
+		git fetch origin && git reset --hard origin/main && \
+		AWS_REGION=$(AWS_REGION) bash -c ' \
+		aws ecr describe-repositories --repository-names $(ECR_REPOSITORY_SERVER) --region $(AWS_REGION) 2>/dev/null && echo \"✅ Server repository exists\" || echo \"❌ Server repository not found\" && \
+		aws ecr describe-repositories --repository-names $(ECR_REPOSITORY_WORKER) --region $(AWS_REGION) 2>/dev/null && echo \"✅ Worker repository exists\" || echo \"❌ Worker repository not found\" \
+		'"
+
 # Manual ECR cleanup trigger
 cleanup-ecr:
 	@echo "🧹 Triggering ECR cleanup workflow..."
