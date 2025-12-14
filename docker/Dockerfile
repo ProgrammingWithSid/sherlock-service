@@ -20,8 +20,6 @@ WORKDIR /app/backend
 RUN apk add --no-cache git
 
 # Set Go environment variables to limit cache usage
-ENV GOCACHE=/tmp/go-cache
-ENV GOTMPDIR=/tmp/go-tmp
 ENV GOOS=linux
 ENV CGO_ENABLED=0
 
@@ -40,7 +38,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ../server ./cmd/s
 
 # Clean up Go build cache and temp files after build to save space
 RUN go clean -cache -testcache || true && \
-    rm -rf /tmp/go-build* /tmp/go-cache /tmp/go-tmp || true
+    rm -rf /tmp/go-build* || true
 
 # Final stage
 FROM alpine:latest
