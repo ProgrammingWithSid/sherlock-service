@@ -69,8 +69,11 @@ func (h *FeedbackHandler) RecordFeedback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Get user ID from session (simplified - would get from auth context)
-	userID := "system" // TODO: Get from auth context
+	// Get user ID from context (set by RequireAuth middleware)
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok || userID == "" {
+		userID = "system" // Fallback for unauthenticated requests
+	}
 
 	feedback := learning.ReviewFeedback{
 		ReviewID:   req.ReviewID,
