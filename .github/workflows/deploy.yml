@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ap-south-1
   ECR_REPOSITORY_SERVER: sherlock-service/server
   ECR_REPOSITORY_WORKER: sherlock-service/worker
   ECS_CLUSTER: sherlock-cluster
@@ -80,4 +80,5 @@ jobs:
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE_WORKER }} \
             --region ${{ env.AWS_REGION }}
+
 
