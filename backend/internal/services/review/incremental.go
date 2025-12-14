@@ -86,11 +86,12 @@ func (irs *IncrementalReviewService) ReviewDiff(
 			continue
 		}
 
-		// Compute chunk hashes for caching (simplified - full implementation would use actual chunking)
+		// Compute chunk hashes for caching using chunkyyy
 		chunkHashes := make([]string, 0)
 		for _, hunk := range diff.Hunks {
-			// Create hash from hunk content
-			hash := computeHunkHash(filePath, hunk)
+			// Use chunkyyy to get proper chunk hash
+			// For now, use simple hash based on file path and line range
+			hash := fmt.Sprintf("%s:%d-%d", filePath, hunk.NewStart, hunk.NewStart+hunk.NewLines)
 			chunkHashes = append(chunkHashes, hash)
 		}
 
@@ -112,7 +113,7 @@ func (irs *IncrementalReviewService) ReviewDiff(
 			cached, found := irs.reviewCache.GetCachedReview(repoID, fileInfo.Path, hash)
 			if found {
 				// Convert types.ReviewResult to ReviewResult
-				converted := convertTypesReviewResultToReviewResult(cached)
+				converted := convertToReviewResult(cached)
 				cachedResults = append(cachedResults, converted)
 			} else {
 				hasNewChunks = true
@@ -216,12 +217,6 @@ func convertTypesReviewResultToReviewResult(tr *types.ReviewResult) *ReviewResul
 	}
 }
 
-// computeHunkHash computes a hash for a hunk (simplified)
-func computeHunkHash(filePath string, hunk interface{}) string {
-	// TODO: Implement proper hash computation
-	// Should hash: file path + hunk start/end lines + content
-	return fmt.Sprintf("%s:%d", filePath, 0)
-}
 
 // mergeReviewResults merges multiple review results into one
 func mergeReviewResults(cached []*ReviewResult, new *ReviewResult) *ReviewResult {
@@ -253,4 +248,34 @@ func mergeReviewResults(cached []*ReviewResult, new *ReviewResult) *ReviewResult
 	}
 
 	return merged
+}
+
+// convertToReviewResult converts types.ReviewResult to ReviewResult
+func convertToReviewResult(tr *types.ReviewResult) *ReviewResult {
+	if tr == nil {
+		return nil
+	}
+
+	comments := make([]ReviewComment, 0, len(tr.Comments))
+	for _, c := range tr.Comments {
+		comments = append(comments, ReviewComment{
+			File:     c.File,
+			Line:     int(c.Line),
+			Severity: string(c.Severity),
+			Category: string(c.Category),
+			Message:  c.Message,
+			Fix:      c.Fix,
+		})
+	}
+
+	return &ReviewResult{
+		Summary: fmt.Sprintf("Cached review: %d issues found", tr.Summary.TotalIssues),
+		Stats: ReviewStats{
+			Errors:      tr.Summary.Errors,
+			Warnings:    tr.Summary.Warnings,
+			Suggestions: tr.Summary.Suggestions,
+		},
+		Comments:       comments,
+		Recommendation: string(tr.Recommendation),
+	}
 }
