@@ -32,11 +32,27 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Create ECR repositories if they don't exist
+        continue-on-error: true
         run: |
-          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY_SERVER }} --region ${{ env.AWS_REGION }} || \
-            aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY_SERVER }} --region ${{ env.AWS_REGION }}
-          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY_WORKER }} --region ${{ env.AWS_REGION }} || \
-            aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY_WORKER }} --region ${{ env.AWS_REGION }}
+          echo "Checking if ECR repositories exist..."
+          SERVER_EXISTS=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY_SERVER }} --region ${{ env.AWS_REGION }} --query 'repositories[0].repositoryName' --output text 2>/dev/null || echo "")
+          WORKER_EXISTS=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY_WORKER }} --region ${{ env.AWS_REGION }} --query 'repositories[0].repositoryName' --output text 2>/dev/null || echo "")
+          
+          if [ -z "$SERVER_EXISTS" ]; then
+            echo "Creating server repository..."
+            aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY_SERVER }} --region ${{ env.AWS_REGION }} || \
+              echo "⚠️  Warning: Could not create server repository. It may already exist or you need ecr:CreateRepository permission."
+          else
+            echo "✅ Server repository exists"
+          fi
+          
+          if [ -z "$WORKER_EXISTS" ]; then
+            echo "Creating worker repository..."
+            aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY_WORKER }} --region ${{ env.AWS_REGION }} || \
+              echo "⚠️  Warning: Could not create worker repository. It may already exist or you need ecr:CreateRepository permission."
+          else
+            echo "✅ Worker repository exists"
+          fi
 
       - name: Build and push server image
         env:
@@ -87,5 +103,3 @@ jobs:
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE_WORKER }} \
             --region ${{ env.AWS_REGION }}
-
-
