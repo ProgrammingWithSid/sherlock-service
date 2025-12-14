@@ -222,4 +222,3 @@ docker builder prune -a -f
 **Need help?** Check the logs:
 - EC2 logs: `docker-compose -f docker/docker-compose.ecr.yml logs -f`
 - GitHub Actions: Repository → Actions tab
-
