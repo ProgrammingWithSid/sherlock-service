@@ -283,6 +283,7 @@ impl ParserService {
                         _ => "unknown",
                     };
 
+                    let signature = self.extract_signature(node, source).ok();
                     symbols.push(CodeSymbol {
                         id: format!("{}_{}_{}", file_path, name, node.start_position().row),
                         symbol_name: name,
@@ -290,7 +291,7 @@ impl ParserService {
                         file_path: file_path.to_string(),
                         line_start: node.start_position().row as i32 + 1,
                         line_end: node.end_position().row as i32 + 1,
-                        signature: Some(self.extract_signature(node, source)?),
+                        signature,
                         dependencies: vec![],
                         exported: false,
                         visibility: None,
@@ -358,6 +359,7 @@ impl ParserService {
                         _ => "unknown",
                     };
 
+                    let signature = self.extract_signature(node, source).ok();
                     symbols.push(CodeSymbol {
                         id: format!("{}_{}_{}", file_path, name, node.start_position().row),
                         symbol_name: name,
@@ -365,7 +367,7 @@ impl ParserService {
                         file_path: file_path.to_string(),
                         line_start: node.start_position().row as i32 + 1,
                         line_end: node.end_position().row as i32 + 1,
-                        signature: Some(self.extract_signature(node, source)?),
+                        signature,
                         dependencies: vec![],
                         exported: false,
                         visibility: None,

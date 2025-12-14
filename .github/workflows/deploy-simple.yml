@@ -11,6 +11,7 @@ env:
   EC2_USER: ubuntu
   ECR_REPOSITORY_SERVER: sherlock-service/server
   ECR_REPOSITORY_WORKER: sherlock-service/worker
+  ECR_REPOSITORY_INDEXER: sherlock-service/indexer
   COMPOSE_FILE: docker/docker-compose.ecr.yml
 
 jobs:
@@ -51,6 +52,16 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest
+
+      - name: Build and push Rust indexer image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f rust-indexer/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:latest
 
       - name: Setup SSH
         run: |
