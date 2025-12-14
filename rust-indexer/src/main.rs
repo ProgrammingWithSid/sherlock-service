@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use serde::{Deserialize, Serialize};
+// Serialization handled by ExtractRequest/ExtractResponse
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
@@ -13,7 +13,7 @@ mod parser;
 mod symbol;
 
 use parser::ParserService;
-use symbol::{CodeSymbol, ExtractRequest, ExtractResponse};
+use symbol::{ExtractRequest, ExtractResponse};
 
 #[derive(Clone)]
 struct AppState {
@@ -76,7 +76,7 @@ async fn extract_symbols(
 async fn extract_dependencies(
     State(state): State<AppState>,
     Path((repo_path, file_path)): Path<(String, String)>,
-    Json(payload): Json<ExtractRequest>,
+    Json(_payload): Json<ExtractRequest>,
 ) -> Result<Json<ExtractResponse>, StatusCode> {
     let full_path = format!("{}/{}", repo_path, file_path);
 

@@ -61,7 +61,7 @@ impl ParserService {
             .context("Failed to read file")?;
 
         let mut parser = Parser::new();
-        parser.set_language(*language)?;
+        parser.set_language(language)?;
 
         let tree = parser.parse(&source_code, None)
             .context("Failed to parse file")?;
@@ -72,7 +72,7 @@ impl ParserService {
         Ok(symbols)
     }
 
-    pub async fn extract_dependencies(&self, file_path: &str) -> Result<Vec<CodeSymbol>> {
+    pub async fn extract_dependencies(&self, _file_path: &str) -> Result<Vec<CodeSymbol>> {
         // For now, return empty - will implement dependency extraction
         // This would analyze imports/use statements
         Ok(vec![])
