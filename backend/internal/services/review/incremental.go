@@ -7,14 +7,18 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/sherlock/service/internal/services/cache"
 	"github.com/sherlock/service/internal/services/git"
+	"github.com/sherlock/service/internal/services/indexer"
 	"github.com/sherlock/service/internal/types"
 )
 
 // IncrementalReviewService provides incremental review capabilities
 type IncrementalReviewService struct {
-	gitService   *git.CloneService
-	reviewCache  *cache.ReviewCache
-	reviewService *SherlockService
+	gitService      *git.CloneService
+	reviewCache     *cache.ReviewCache
+	reviewService   *SherlockService
+	rustIndexer     *indexer.RustIndexerService // Optional rust indexer for chunk hashing
+	useRustIndexer  bool
+	repoPath        string // Current repo path for rust indexer
 }
 
 // NewIncrementalReviewService creates a new incremental review service
@@ -22,11 +26,21 @@ func NewIncrementalReviewService(
 	gitService *git.CloneService,
 	reviewCache *cache.ReviewCache,
 	reviewService *SherlockService,
+	rustIndexerURL string,
 ) *IncrementalReviewService {
+	rustIndexer := indexer.NewRustIndexerService(rustIndexerURL)
+	useRust := rustIndexer.IsEnabled()
+	
+	if useRust {
+		log.Info().Str("url", rustIndexerURL).Msg("Rust indexer enabled for incremental reviews")
+	}
+	
 	return &IncrementalReviewService{
-		gitService:    gitService,
-		reviewCache:   reviewCache,
-		reviewService: reviewService,
+		gitService:     gitService,
+		reviewCache:    reviewCache,
+		reviewService:  reviewService,
+		rustIndexer:    rustIndexer,
+		useRustIndexer: useRust,
 	}
 }
 
@@ -47,6 +61,8 @@ func (irs *IncrementalReviewService) ReviewDiff(
 	headBranch string,
 	config ReviewConfig,
 ) (*ReviewResult, error) {
+	// Store repo path for rust indexer
+	irs.repoPath = repoPath
 	log.Info().
 		Str("repo_path", repoPath).
 		Str("base_branch", baseBranch).
@@ -86,12 +102,36 @@ func (irs *IncrementalReviewService) ReviewDiff(
 			continue
 		}
 
-		// Compute chunk hashes for caching using chunkyyy
+		// Compute chunk hashes for caching (use rust-indexer if available, else simple hash)
 		chunkHashes := make([]string, 0)
 		for _, hunk := range diff.Hunks {
-			// Use chunkyyy to get proper chunk hash
-			// For now, use simple hash based on file path and line range
-			hash := fmt.Sprintf("%s:%d-%d", filePath, hunk.NewStart, hunk.NewStart+hunk.NewLines)
+			var hash string
+			
+			// Try rust-indexer first if enabled
+			if irs.useRustIndexer && irs.rustIndexer != nil {
+				rustHash, err := irs.rustIndexer.GetChunkHash(
+					ctx,
+					repoPath,
+					filePath,
+					hunk.NewStart,
+					hunk.NewStart+hunk.NewLines,
+				)
+				if err == nil {
+					hash = rustHash
+					log.Debug().
+						Str("file", filePath).
+						Int("start", hunk.NewStart).
+						Int("end", hunk.NewStart+hunk.NewLines).
+						Msg("Using rust-indexer for chunk hash")
+				} else {
+					log.Debug().Err(err).Msg("Rust indexer hash failed, using simple hash")
+					hash = fmt.Sprintf("%s:%d-%d", filePath, hunk.NewStart, hunk.NewStart+hunk.NewLines)
+				}
+			} else {
+				// Simple hash based on file path and line range
+				hash = fmt.Sprintf("%s:%d-%d", filePath, hunk.NewStart, hunk.NewStart+hunk.NewLines)
+			}
+			
 			chunkHashes = append(chunkHashes, hash)
 		}
 

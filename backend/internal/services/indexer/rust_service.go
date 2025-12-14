@@ -66,7 +66,7 @@ func (rs *RustIndexerService) ExtractSymbols(ctx context.Context, repoPath strin
 	}
 
 	url := fmt.Sprintf("%s/extract/%s/%s", rs.baseURL, repoPath, filePath)
-	
+
 	reqBody := RustExtractRequest{}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -121,7 +121,7 @@ func (rs *RustIndexerService) ExtractDependencies(ctx context.Context, repoPath 
 	}
 
 	url := fmt.Sprintf("%s/extract-deps/%s/%s", rs.baseURL, repoPath, filePath)
-	
+
 	reqBody := RustExtractRequest{}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -167,7 +167,7 @@ func (rs *RustIndexerService) GetChunkHash(ctx context.Context, repoPath string,
 	}
 
 	url := fmt.Sprintf("%s/hash/%s/%s", rs.baseURL, repoPath, filePath)
-	
+
 	reqBody := RustExtractRequest{
 		StartLine: startLine,
 		EndLine:   endLine,
@@ -208,4 +208,3 @@ func (rs *RustIndexerService) GetChunkHash(ctx context.Context, repoPath string,
 func (rs *RustIndexerService) IsEnabled() bool {
 	return rs.enabled
 }
-

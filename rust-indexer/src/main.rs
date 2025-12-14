@@ -60,7 +60,7 @@ async fn extract_symbols(
     Json(payload): Json<ExtractRequest>,
 ) -> Result<Json<ExtractResponse>, StatusCode> {
     let full_path = format!("{}/{}", repo_path, file_path);
-    
+
     match state.parser.extract_symbols(&full_path).await {
         Ok(symbols) => Ok(Json(ExtractResponse {
             symbols,
@@ -79,7 +79,7 @@ async fn extract_dependencies(
     Json(payload): Json<ExtractRequest>,
 ) -> Result<Json<ExtractResponse>, StatusCode> {
     let full_path = format!("{}/{}", repo_path, file_path);
-    
+
     match state.parser.extract_dependencies(&full_path).await {
         Ok(deps) => Ok(Json(ExtractResponse {
             symbols: deps,
@@ -98,7 +98,7 @@ async fn get_chunk_hash(
     Json(payload): Json<ExtractRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let full_path = format!("{}/{}", repo_path, file_path);
-    
+
     match state.parser.get_chunk_hash(&full_path, payload.start_line, payload.end_line).await {
         Ok(hash) => Ok(Json(serde_json::json!({
             "hash": hash,
@@ -110,4 +110,3 @@ async fn get_chunk_hash(
         }
     }
 }
-

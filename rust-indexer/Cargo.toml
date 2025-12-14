@@ -37,4 +37,3 @@ walkdir = "2.4"
 opt-level = 3
 lto = true
 codegen-units = 1
-

@@ -25,4 +25,3 @@ pub struct ExtractResponse {
     pub symbols: Vec<CodeSymbol>,
     pub success: bool,
 }
-

@@ -143,11 +143,12 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 	// Initialize review cache
 	reviewCache := cache.NewReviewCache(redisClient, cfg.ReviewCacheTTLHours)
 
-	// Initialize incremental review service
+	// Initialize incremental review service (with optional rust-indexer)
 	incrementalReviewSvc := review.NewIncrementalReviewService(
 		gitService,
 		reviewCache,
 		reviewService,
+		cfg.RustIndexerURL,
 	)
 
 	// Initialize codebase indexer (with Rust or chunkyyy integration)

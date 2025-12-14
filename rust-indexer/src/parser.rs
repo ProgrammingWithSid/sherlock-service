@@ -17,7 +17,7 @@ pub struct ParserService {
 impl ParserService {
     pub fn new() -> Self {
         let mut parsers = std::collections::HashMap::new();
-        
+
         // Initialize parsers for each language
         parsers.insert("rust".to_string(), ts_rust::language());
         parsers.insert("javascript".to_string(), ts_js::language());
@@ -27,7 +27,7 @@ impl ParserService {
         parsers.insert("python".to_string(), ts_py::language());
         parsers.insert("java".to_string(), ts_java::language());
         parsers.insert("cpp".to_string(), ts_cpp::language());
-        
+
         Self { parsers }
     }
 
@@ -36,7 +36,7 @@ impl ParserService {
             .extension()?
             .to_str()?
             .to_lowercase();
-        
+
         match ext.as_str() {
             "rs" => Some("rust".to_string()),
             "js" | "jsx" | "mjs" | "cjs" => Some("javascript".to_string()),
@@ -53,7 +53,7 @@ impl ParserService {
     pub async fn extract_symbols(&self, file_path: &str) -> Result<Vec<CodeSymbol>> {
         let language_name = Self::detect_language(file_path)
             .context("Unsupported file type")?;
-        
+
         let language = self.parsers.get(&language_name)
             .context("Language parser not available")?;
 
@@ -91,7 +91,7 @@ impl ParserService {
         }
 
         let chunk: String = lines[start..end].join("\n");
-        
+
         // Simple hash (in production, use SHA256)
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -382,11 +382,10 @@ impl ParserService {
     fn extract_signature(&self, node: &tree_sitter::Node, source: &str) -> Result<String> {
         let start_byte = node.start_byte();
         let end_byte = node.end_byte().min(source.len());
-        
+
         // Extract first line as signature (simplified)
         let text = &source[start_byte..end_byte];
         let first_line = text.lines().next().unwrap_or("").trim();
         Ok(first_line.to_string())
     }
 }
-
