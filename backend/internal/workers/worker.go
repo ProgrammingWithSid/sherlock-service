@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/hibiken/asynq"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	appconfig "github.com/sherlock/service/internal/config"
 	"github.com/sherlock/service/internal/database"
@@ -222,7 +223,6 @@ func (wp *WorkerPool) handleReviewJob(ctx context.Context, t *asynq.Task) error 
 		Str("job_id", job.ID).
 		Str("repo", job.Repo.FullName).
 		Int("pr_number", job.PR.Number).
-		Int("retry_count", int(t.RetryCount())).
 		Logger()
 
 	logger.Info().Msg("Processing review job")
@@ -299,7 +299,7 @@ func isNonRetryableError(err error) bool {
 	return false
 }
 
-func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob, logger log.Logger, startTime time.Time) error {
+func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob, logger zerolog.Logger, startTime time.Time) error {
 	var worktreePath string
 	var repoPath string
 
@@ -384,11 +384,10 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 	}
 
 	// Step 5: Build review config
-	reviewConfig := wp.buildReviewConfig(job, repo, repoConfig)
+	reviewConfig := wp.buildReviewConfig(*job, repo, repoConfig)
 
 	// Step 6: Run code-sherlock review (use incremental if enabled)
 	var reviewResult *review.ReviewResult
-	var err error
 
 	if wp.config.EnableIncrementalReviews && repo != nil {
 		// Use incremental review service
