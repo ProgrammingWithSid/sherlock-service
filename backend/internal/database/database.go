@@ -190,6 +190,28 @@ func (db *DB) migrate() error {
 			updated_at TIMESTAMP DEFAULT NOW(),
 			UNIQUE(review_id, comment_id)
 		)`,
+		// Migration: Add org_id column if it doesn't exist (for existing databases)
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.columns 
+				WHERE table_name = 'review_feedback' AND column_name = 'org_id'
+			) THEN
+				-- Add org_id column (nullable first)
+				ALTER TABLE review_feedback ADD COLUMN org_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+				-- Update existing rows: get org_id from reviews table
+				UPDATE review_feedback rf
+				SET org_id = r.org_id
+				FROM reviews r
+				WHERE r.id = rf.review_id AND rf.org_id IS NULL;
+				-- Make NOT NULL after updating existing rows
+				ALTER TABLE review_feedback ALTER COLUMN org_id SET NOT NULL;
+			END IF;
+		EXCEPTION
+			WHEN duplicate_column THEN
+				-- Column already exists, ignore error
+				NULL;
+		END $$;`,
 		`CREATE INDEX IF NOT EXISTS idx_review_feedback_review ON review_feedback(review_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_review_feedback_user ON review_feedback(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_review_feedback_org ON review_feedback(org_id)`,
