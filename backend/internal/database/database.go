@@ -193,7 +193,6 @@ func (db *DB) migrate() error {
 		// Migration: Add missing columns to review_feedback if they don't exist (for existing databases)
 		`DO $$
 		BEGIN
-			-- Add file_path column if missing
 			IF NOT EXISTS (
 				SELECT 1 FROM information_schema.columns 
 				WHERE table_name = 'review_feedback' AND column_name = 'file_path'
@@ -203,7 +202,6 @@ func (db *DB) migrate() error {
 				ALTER TABLE review_feedback ALTER COLUMN file_path SET NOT NULL;
 			END IF;
 			
-			-- Add line_number column if missing
 			IF NOT EXISTS (
 				SELECT 1 FROM information_schema.columns 
 				WHERE table_name = 'review_feedback' AND column_name = 'line_number'
@@ -213,7 +211,6 @@ func (db *DB) migrate() error {
 				ALTER TABLE review_feedback ALTER COLUMN line_number SET NOT NULL;
 			END IF;
 			
-			-- Add org_id column if missing
 			IF NOT EXISTS (
 				SELECT 1 FROM information_schema.columns 
 				WHERE table_name = 'review_feedback' AND column_name = 'org_id'
@@ -226,7 +223,6 @@ func (db *DB) migrate() error {
 				ALTER TABLE review_feedback ALTER COLUMN org_id SET NOT NULL;
 			END IF;
 			
-			-- Add updated_at column if missing
 			IF NOT EXISTS (
 				SELECT 1 FROM information_schema.columns 
 				WHERE table_name = 'review_feedback' AND column_name = 'updated_at'
@@ -235,12 +231,11 @@ func (db *DB) migrate() error {
 			END IF;
 		EXCEPTION
 			WHEN duplicate_column THEN
-				-- Column already exists, ignore error
 				NULL;
 		END $$;`,
 		`CREATE INDEX IF NOT EXISTS idx_review_feedback_review ON review_feedback(review_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_review_feedback_user ON review_feedback(user_id)`,
-		-- Create org_id index only if column exists
+		// Create org_id index only if column exists
 		`DO $$
 		BEGIN
 			IF EXISTS (
@@ -250,7 +245,7 @@ func (db *DB) migrate() error {
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_org ON review_feedback(org_id);
 			END IF;
 		END $$;`,
-		-- Create file_path/line_number index only if columns exist
+		// Create file_path/line_number index only if columns exist
 		`DO $$
 		BEGIN
 			IF EXISTS (
