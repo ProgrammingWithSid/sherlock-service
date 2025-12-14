@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 	"github.com/sherlock/service/internal/database"
 )
@@ -124,17 +125,51 @@ func (ci *CodebaseIndexer) findCodeFiles(repoPath string) ([]string, error) {
 
 // storeSymbol stores a symbol in the database
 func (ci *CodebaseIndexer) storeSymbol(ctx context.Context, symbol *CodeSymbol) error {
-	// TODO: Implement database storage
-	// Query: INSERT INTO code_symbols (id, repo_id, file_path, symbol_name, symbol_type, line_start, line_end, signature, dependencies)
-	// VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	// ON CONFLICT (repo_id, file_path, symbol_name) DO UPDATE SET ...
+	// Convert dependencies slice to PostgreSQL array
+	var depsArray pq.StringArray
+	if len(symbol.Dependencies) > 0 {
+		depsArray = pq.StringArray(symbol.Dependencies)
+	} else {
+		depsArray = pq.StringArray{}
+	}
+
+	query := `
+		INSERT INTO code_symbols (repo_id, file_path, symbol_name, symbol_type, line_start, line_end, signature, dependencies)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (repo_id, file_path, symbol_name) DO UPDATE SET
+			symbol_type = EXCLUDED.symbol_type,
+			line_start = EXCLUDED.line_start,
+			line_end = EXCLUDED.line_end,
+			signature = EXCLUDED.signature,
+			dependencies = EXCLUDED.dependencies,
+			updated_at = NOW()
+	`
+
+	_, err := ci.db.Conn().ExecContext(ctx, query,
+		symbol.RepoID,
+		symbol.FilePath,
+		symbol.SymbolName,
+		symbol.SymbolType,
+		symbol.LineStart,
+		symbol.LineEnd,
+		symbol.Signature,
+		depsArray,
+	)
+
+	if err != nil {
+		log.Warn().Err(err).
+			Str("symbol", symbol.SymbolName).
+			Str("file", symbol.FilePath).
+			Msg("Failed to store symbol")
+		return fmt.Errorf("failed to store symbol: %w", err)
+	}
 
 	log.Debug().
 		Str("symbol", symbol.SymbolName).
 		Str("type", symbol.SymbolType).
 		Str("file", symbol.FilePath).
 		Int("deps", len(symbol.Dependencies)).
-		Msg("Symbol extracted (ready for storage)")
+		Msg("Symbol stored in database")
 	return nil
 }
 
@@ -148,9 +183,51 @@ func (ci *CodebaseIndexer) GetRelatedCode(ctx context.Context, repoID string, fi
 
 	// Find symbols that match dependencies
 	related := make([]CodeSymbol, 0)
-	for range deps {
-		// TODO: Query database for symbols matching dep.Name
-		// For now, return empty
+	if len(deps) == 0 {
+		return related, nil
+	}
+
+	// Build query to find symbols matching dependency names
+	depNames := make([]string, 0, len(deps))
+	for _, dep := range deps {
+		depNames = append(depNames, dep.Name)
+	}
+
+	query := `
+		SELECT id, repo_id, file_path, symbol_name, symbol_type, line_start, line_end, signature, dependencies, created_at
+		FROM code_symbols
+		WHERE repo_id = $1 AND symbol_name = ANY($2)
+	`
+
+	rows, err := ci.db.Conn().QueryContext(ctx, query, repoID, pq.Array(depNames))
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to query related symbols")
+		return related, nil // Return empty on error
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var symbol CodeSymbol
+		var depsArray pq.StringArray
+
+		err := rows.Scan(
+			&symbol.ID,
+			&symbol.RepoID,
+			&symbol.FilePath,
+			&symbol.SymbolName,
+			&symbol.SymbolType,
+			&symbol.LineStart,
+			&symbol.LineEnd,
+			&symbol.Signature,
+			&depsArray,
+			&symbol.CreatedAt,
+		)
+		if err != nil {
+			continue
+		}
+
+		symbol.Dependencies = []string(depsArray)
+		related = append(related, symbol)
 	}
 
 	return related, nil
@@ -175,14 +252,24 @@ func (ci *CodebaseIndexer) InvalidateIndex(ctx context.Context, repoID string, f
 		Str("file_path", filePath).
 		Msg("Invalidating index for file")
 
-	// TODO: Mark symbols in this file as stale
-	// Will trigger re-indexing on next access
+	// Delete symbols for this file - will trigger re-indexing on next access
+	query := `DELETE FROM code_symbols WHERE repo_id = $1 AND file_path = $2`
+	_, err := ci.db.Conn().ExecContext(ctx, query, repoID, filePath)
+	if err != nil {
+		log.Warn().Err(err).Str("file", filePath).Msg("Failed to invalidate index")
+		return fmt.Errorf("failed to invalidate index: %w", err)
+	}
 
 	return nil
 }
 
 // GetIndexStats returns statistics about the index
 func (ci *CodebaseIndexer) GetIndexStats(ctx context.Context, repoID string) (int, error) {
-	// TODO: Return count of indexed symbols
-	return 0, nil
+	query := `SELECT COUNT(*) FROM code_symbols WHERE repo_id = $1`
+	var count int
+	err := ci.db.Conn().QueryRowContext(ctx, query, repoID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get index stats: %w", err)
+	}
+	return count, nil
 }

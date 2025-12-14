@@ -134,6 +134,31 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_org ON github_installations(org_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_installations_id ON github_installations(installation_id)`,
+		// Code symbols table for codebase indexing
+		`CREATE TABLE IF NOT EXISTS code_symbols (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			repo_id UUID NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+			file_path TEXT NOT NULL,
+			symbol_name TEXT NOT NULL,
+			symbol_type TEXT NOT NULL,
+			line_start INT NOT NULL,
+			line_end INT NOT NULL,
+			signature TEXT,
+			dependencies TEXT[],
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW(),
+			UNIQUE(repo_id, file_path, symbol_name)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_code_symbols_repo ON code_symbols(repo_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_code_symbols_file ON code_symbols(repo_id, file_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_code_symbols_name ON code_symbols(repo_id, symbol_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_code_symbols_type ON code_symbols(symbol_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_code_symbols_deps ON code_symbols USING GIN(dependencies)`,
+		`DROP TRIGGER IF EXISTS update_code_symbols_updated_at ON code_symbols`,
+		`CREATE TRIGGER update_code_symbols_updated_at
+		BEFORE UPDATE ON code_symbols
+		FOR EACH ROW
+		EXECUTE FUNCTION update_updated_at_column()`,
 		// Review feedback table for learning system
 		`CREATE TABLE IF NOT EXISTS review_feedback (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

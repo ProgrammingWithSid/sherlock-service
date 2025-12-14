@@ -167,11 +167,39 @@ func (ls *LearningService) GetTeamPreferences(ctx context.Context, orgID string)
 	preferences := make(map[string]interface{})
 	preferences["patterns"] = patterns
 
-	// Add learned rules based on feedback
-	// Example: If team dismisses "use const" comments often, reduce them
-	preferences["learned_rules"] = []string{
-		// Will be populated based on feedback analysis
+	// Add learned rules based on feedback analysis
+	learnedRules := make([]string, 0)
+
+	// Analyze feedback patterns to generate rules
+	if patternsMap, ok := patterns["feedback_distribution"].(map[string]int); ok {
+		total := patterns["total_feedback"].(int)
+		
+		// Rule 1: If >50% of feedback is "dismissed", suggest reducing similar comments
+		if dismissed, ok := patternsMap["dismissed"]; ok && total > 10 {
+			dismissRate := float64(dismissed) / float64(total) * 100
+			if dismissRate > 50 {
+				learnedRules = append(learnedRules, "High dismissal rate detected - consider reducing similar comment types")
+			}
+		}
+
+		// Rule 2: If >70% acceptance rate, team is satisfied with review quality
+		if accepted, ok := patternsMap["accepted"]; ok && total > 10 {
+			acceptRate := float64(accepted) / float64(total) * 100
+			if acceptRate > 70 {
+				learnedRules = append(learnedRules, "High acceptance rate - review quality is good")
+			}
+		}
+
+		// Rule 3: If many "fixed" feedbacks, reviews are actionable
+		if fixed, ok := patternsMap["fixed"]; ok && total > 10 {
+			fixedRate := float64(fixed) / float64(total) * 100
+			if fixedRate > 30 {
+				learnedRules = append(learnedRules, "High fix rate - reviews are actionable and helpful")
+			}
+		}
 	}
+
+	preferences["learned_rules"] = learnedRules
 
 	return preferences, nil
 }
