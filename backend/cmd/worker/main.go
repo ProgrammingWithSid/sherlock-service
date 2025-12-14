@@ -31,8 +31,13 @@ func main() {
 	// Initialize queue
 	reviewQueue := queue.NewReviewQueue(redisClient)
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatal().Err(err).Msg("Invalid configuration")
+	}
+
 	// Initialize workers
-	workerPool := workers.NewWorkerPool(reviewQueue, db, cfg)
+	workerPool := workers.NewWorkerPool(reviewQueue, db, cfg, redisClient)
 
 	// Start workers
 	go workerPool.Start(context.Background())
@@ -48,5 +53,3 @@ func main() {
 	workerPool.Stop()
 	log.Info().Msg("Worker stopped")
 }
-
-

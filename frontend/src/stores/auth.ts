@@ -80,7 +80,7 @@ export const useAuthStore = defineStore('auth', {
         if (orgId) {
           this.orgId = orgId
         }
-        
+
         // Try to fetch current user to validate session
         try {
           await this.fetchCurrentUser()

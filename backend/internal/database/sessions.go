@@ -76,4 +76,3 @@ func (db *DB) CleanupExpiredSessions() error {
 	}
 	return nil
 }
-

@@ -25,6 +25,11 @@ import (
 func main() {
 	cfg := config.Load()
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatal().Err(err).Msg("Invalid configuration")
+	}
+
 	// Initialize database
 	db, err := database.New(cfg.DatabaseURL)
 	if err != nil {
@@ -40,7 +45,7 @@ func main() {
 	reviewQueue := queue.NewReviewQueue(redisClient)
 
 	// Initialize workers
-	workerPool := workers.NewWorkerPool(reviewQueue, db, cfg)
+	workerPool := workers.NewWorkerPool(reviewQueue, db, cfg, redisClient)
 	go workerPool.Start(context.Background())
 
 	// Initialize session store

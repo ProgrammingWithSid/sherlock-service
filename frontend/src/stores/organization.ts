@@ -1,6 +1,6 @@
-import { defineStore } from 'pinia'
 import { authAPI } from '@/api/auth'
 import type { Organization } from '@/types'
+import { defineStore } from 'pinia'
 
 interface OrganizationState {
   current: Organization | null

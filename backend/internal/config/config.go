@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -49,6 +50,13 @@ type Config struct {
 	MaxFilesPerReview   int
 	MaxConcurrentReviews int
 	ReviewTimeoutMs      int
+
+	// Cache
+	ReviewCacheTTLHours int
+
+	// Features
+	EnableIncrementalReviews bool
+	EnableCodebaseIndexing   bool
 }
 
 func Load() *Config {
@@ -85,7 +93,59 @@ func Load() *Config {
 		MaxFilesPerReview:   getEnvInt("MAX_FILES_PER_REVIEW", 100),
 		MaxConcurrentReviews: getEnvInt("MAX_CONCURRENT_REVIEWS", 5),
 		ReviewTimeoutMs:      getEnvInt("REVIEW_TIMEOUT_MS", 300000),
+
+		ReviewCacheTTLHours: getEnvInt("REVIEW_CACHE_TTL_HOURS", 24),
+
+		EnableIncrementalReviews: getEnvBool("ENABLE_INCREMENTAL_REVIEWS", true),
+		EnableCodebaseIndexing:   getEnvBool("ENABLE_CODEBASE_INDEXING", false),
 	}
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return strings.ToLower(value) == "true" || value == "1"
+}
+
+// Validate validates the configuration and returns an error if invalid
+func (c *Config) Validate() error {
+	var errors []string
+
+	if c.DatabaseURL == "" {
+		errors = append(errors, "DATABASE_URL is required")
+	}
+
+	if c.RedisURL == "" {
+		errors = append(errors, "REDIS_URL is required")
+	}
+
+	if c.AIProvider != "openai" && c.AIProvider != "claude" {
+		errors = append(errors, "AI_PROVIDER must be 'openai' or 'claude'")
+	}
+
+	if c.AIProvider == "openai" && c.OpenAIAPIKey == "" {
+		errors = append(errors, "OPENAI_API_KEY is required when AI_PROVIDER is 'openai'")
+	}
+
+	if c.AIProvider == "claude" && c.ClaudeAPIKey == "" {
+		errors = append(errors, "CLAUDE_API_KEY is required when AI_PROVIDER is 'claude'")
+	}
+
+	if c.Port <= 0 || c.Port > 65535 {
+		errors = append(errors, "PORT must be between 1 and 65535")
+	}
+
+	if c.ReviewCacheTTLHours < 0 {
+		errors = append(errors, "REVIEW_CACHE_TTL_HOURS must be non-negative")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("config validation failed: %s", strings.Join(errors, ", "))
+	}
+
+	return nil
 }
 
 func getEnv(key string, defaultValue string) string {

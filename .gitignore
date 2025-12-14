@@ -91,3 +91,4 @@ coverage/
 .yarn/install-state.gz
 .pnp.*
 Makefile
+docs/
