@@ -20,6 +20,7 @@ import (
 	repoconfig "github.com/sherlock/service/internal/services/config"
 	"github.com/sherlock/service/internal/services/git"
 	"github.com/sherlock/service/internal/services/indexer"
+	"github.com/sherlock/service/internal/services/metrics"
 	"github.com/sherlock/service/internal/services/review"
 	"github.com/sherlock/service/internal/types"
 )
@@ -38,6 +39,7 @@ type WorkerPool struct {
 	redisClient           *redis.Client
 	incrementalReviewSvc  *review.IncrementalReviewService
 	codebaseIndexer       *indexer.CodebaseIndexer
+	metricsService        *metrics.MetricsService
 }
 
 func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconfig.Config, redisClient *redis.Client) *WorkerPool {
@@ -151,6 +153,9 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 	// Initialize codebase indexer (with chunkyyy integration)
 	codebaseIndexer := indexer.NewCodebaseIndexer(db, cfg.ReposPath, "")
 
+	// Initialize metrics service
+	metricsService := metrics.NewMetricsService(redisClient)
+
 	return &WorkerPool{
 		server:              reviewQueue.GetServer(),
 		db:                  db,
@@ -163,6 +168,7 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 		redisClient:         redisClient,
 		incrementalReviewSvc: incrementalReviewSvc,
 		codebaseIndexer:     codebaseIndexer,
+		metricsService:      metricsService,
 	}
 }
 
@@ -394,10 +400,13 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 
 	// Step 6: Run code-sherlock review (use incremental if enabled)
 	var reviewResult *review.ReviewResult
+	var usedIncremental bool
+	var usedCache bool
 
 	if wp.config.EnableIncrementalReviews && repo != nil {
 		// Use incremental review service
 		logger.Info().Msg("Using incremental review service")
+		usedIncremental = true
 		reviewResult, err = wp.incrementalReviewSvc.ReviewDiff(
 			ctx,
 			repoPath,
@@ -408,6 +417,7 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 		)
 		if err != nil {
 			logger.Warn().Err(err).Msg("Incremental review failed, falling back to full review")
+			usedIncremental = false
 			// Fall back to full review
 			reviewReq := review.ReviewRequest{
 				WorktreePath: worktreePath,
@@ -416,6 +426,10 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 				Config:       reviewConfig,
 			}
 			reviewResult, err = wp.reviewService.RunReview(reviewReq)
+		} else {
+			// Check if cache was used (incremental review service tracks this)
+			// For now, assume cache was used if incremental succeeded
+			usedCache = true
 		}
 	} else {
 		// Use full review
@@ -430,6 +444,11 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 
 	if err != nil {
 		logger.Error().Err(err).Msg("Review execution failed")
+		// Record failed review metrics
+		if wp.metricsService != nil {
+			duration := time.Since(startTime)
+			wp.metricsService.RecordReview(duration, false, false, usedIncremental)
+		}
 		return fmt.Errorf("review execution failed: %w", err)
 	}
 
@@ -463,7 +482,18 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 
 	duration := int(time.Since(startTime).Milliseconds())
 
-	// Step 11: Save result
+	// Step 11: Record metrics
+	if wp.metricsService != nil {
+		reviewDuration := time.Since(startTime)
+		wp.metricsService.RecordReview(reviewDuration, true, usedCache, usedIncremental)
+		logger.Info().
+			Dur("duration", reviewDuration).
+			Bool("incremental", usedIncremental).
+			Bool("cache_used", usedCache).
+			Msg("Review metrics recorded")
+	}
+
+	// Step 12: Save result
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("failed to marshal result: %w", err)

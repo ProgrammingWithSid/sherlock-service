@@ -124,4 +124,3 @@ func IsCodeFile(filePath string) bool {
 	}
 	return false
 }
-

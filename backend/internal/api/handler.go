@@ -18,9 +18,10 @@ import (
 )
 
 type Handler struct {
-	db          *database.DB
-	reviewQueue *queue.ReviewQueue
-	config      *config.Config
+	db             *database.DB
+	reviewQueue    *queue.ReviewQueue
+	config         *config.Config
+	metricsService interface{} // Will be *metrics.MetricsService when integrated
 }
 
 func NewHandler(db *database.DB, reviewQueue *queue.ReviewQueue, cfg *config.Config) *Handler {
@@ -63,6 +64,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 	r.Route("/queue", func(r chi.Router) {
 		r.Get("/status", h.GetQueueStatus)
+	})
+
+	r.Route("/metrics", func(r chi.Router) {
+		r.Get("/", h.GetMetrics)
 	})
 }
 

@@ -307,7 +307,7 @@ async function getChunkHash() {
     for (const chunk of chunks) {
       const start = chunk.startLine || chunk.metadata?.startLine || chunk.range?.start?.line || 1;
       const end = chunk.endLine || chunk.metadata?.endLine || chunk.range?.end?.line || 1;
-      
+
       if (start <= %d && end >= %d) {
         console.log(chunk.hash || chunk.metadata?.hash || '');
         return;
@@ -324,4 +324,3 @@ async function getChunkHash() {
 getChunkHash();
 `, startLine, endLine)
 }
-

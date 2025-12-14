@@ -93,7 +93,7 @@ func (ci *CodebaseIndexer) IndexRepository(ctx context.Context, repoID string, r
 func (ci *CodebaseIndexer) findCodeFiles(repoPath string) ([]string, error) {
 	// Supported extensions for chunkyyy
 	extensions := []string{".ts", ".tsx", ".js", ".jsx", ".vue"}
-	
+
 	var files []string
 	err := filepath.Walk(repoPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -129,7 +129,7 @@ func (ci *CodebaseIndexer) storeSymbol(ctx context.Context, symbol *CodeSymbol) 
 	// Query: INSERT INTO code_symbols (id, repo_id, file_path, symbol_name, symbol_type, line_start, line_end, signature, dependencies)
 	// VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	// ON CONFLICT (repo_id, file_path, symbol_name) DO UPDATE SET ...
-	
+
 	log.Debug().
 		Str("symbol", symbol.SymbolName).
 		Str("type", symbol.SymbolType).
