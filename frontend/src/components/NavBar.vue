@@ -55,6 +55,7 @@ const navItems = computed<NavItem[]>(() => {
     { name: 'Dashboard', path: authStore.isSuperAdmin ? '/admin' : '/' },
     { name: 'Repositories', path: '/repositories' },
     { name: 'Reviews', path: '/reviews' },
+    { name: 'Metrics', path: '/metrics' },
     { name: 'Settings', path: '/settings' },
   ]
   return items
