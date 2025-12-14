@@ -52,6 +52,22 @@
         {
           "name": "MAX_REPO_AGE_HOURS",
           "value": "24"
+        },
+        {
+          "name": "REVIEW_CACHE_TTL_HOURS",
+          "value": "24"
+        },
+        {
+          "name": "REVIEW_TIMEOUT_MS",
+          "value": "300000"
+        },
+        {
+          "name": "ENABLE_INCREMENTAL_REVIEWS",
+          "value": "true"
+        },
+        {
+          "name": "ENABLE_CODEBASE_INDEXING",
+          "value": "false"
         }
       ],
       "secrets": [
@@ -99,4 +115,5 @@
     }
   ]
 }
+
 

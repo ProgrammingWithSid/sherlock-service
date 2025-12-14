@@ -34,6 +34,18 @@
         {
           "name": "REVIEW_TIMEOUT_MS",
           "value": "300000"
+        },
+        {
+          "name": "REVIEW_CACHE_TTL_HOURS",
+          "value": "24"
+        },
+        {
+          "name": "ENABLE_INCREMENTAL_REVIEWS",
+          "value": "true"
+        },
+        {
+          "name": "ENABLE_CODEBASE_INDEXING",
+          "value": "false"
         }
       ],
       "secrets": [
@@ -66,4 +78,5 @@
     }
   ]
 }
+
 
