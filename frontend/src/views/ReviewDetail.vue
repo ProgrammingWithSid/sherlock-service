@@ -79,6 +79,66 @@
             </div>
           </div>
 
+          <!-- Quality Metrics Section -->
+          <div v-if="reviewResult.qualityMetrics" class="mb-6">
+            <QualityChart :metrics="reviewResult.qualityMetrics" />
+          </div>
+
+          <!-- Quality Metrics Details Section -->
+          <div v-if="reviewResult.qualityMetrics" class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 mb-6 border border-blue-200">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Quality Metrics Details</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div>
+                <p class="text-sm text-gray-600">Overall Score</p>
+                <p class="mt-1 text-3xl font-bold" :class="getQualityScoreClass(reviewResult.qualityMetrics.overallScore)">
+                  {{ reviewResult.qualityMetrics.overallScore.toFixed(1) }}
+                </p>
+                <p class="text-xs text-gray-500 mt-1">out of 100</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Accuracy</p>
+                <p class="mt-1 text-2xl font-bold text-blue-600">
+                  {{ reviewResult.qualityMetrics.accuracy.toFixed(1) }}%
+                </p>
+                <p class="text-xs text-gray-500 mt-1">Comment accuracy</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Actionability</p>
+                <p class="mt-1 text-2xl font-bold text-green-600">
+                  {{ reviewResult.qualityMetrics.actionability.toFixed(1) }}%
+                </p>
+                <p class="text-xs text-gray-500 mt-1">Fix rate</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Coverage</p>
+                <p class="mt-1 text-2xl font-bold text-purple-600">
+                  {{ reviewResult.qualityMetrics.coverage.toFixed(1) }}%
+                </p>
+                <p class="text-xs text-gray-500 mt-1">Code reviewed</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-blue-200">
+              <div>
+                <p class="text-sm text-gray-600">Precision</p>
+                <p class="mt-1 text-xl font-semibold text-gray-700">
+                  {{ reviewResult.qualityMetrics.precision.toFixed(1) }}%
+                </p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Recall</p>
+                <p class="mt-1 text-xl font-semibold text-gray-700">
+                  {{ reviewResult.qualityMetrics.recall.toFixed(1) }}%
+                </p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Confidence</p>
+                <p class="mt-1 text-xl font-semibold text-gray-700">
+                  {{ reviewResult.qualityMetrics.confidence.toFixed(1) }}%
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div v-if="reviewResult.comments.length > 0" class="mt-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Comments</h3>
             <div class="space-y-4">
@@ -125,6 +185,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import CommentFeedback from '@/components/CommentFeedback.vue'
+import QualityChart from '@/components/QualityChart.vue'
 import { useReviewsStore } from '@/stores/reviews'
 import type { Review, ReviewResult } from '@/types'
 
@@ -158,6 +219,12 @@ const getSeverityClass = (severity: string): string => {
     default:
       return 'bg-blue-100 text-blue-800'
   }
+}
+
+const getQualityScoreClass = (score: number): string => {
+  if (score >= 80) return 'text-green-600'
+  if (score >= 60) return 'text-yellow-600'
+  return 'text-red-600'
 }
 
 onMounted(async () => {

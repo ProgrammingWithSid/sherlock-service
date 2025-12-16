@@ -3,7 +3,7 @@
     <h1 class="text-2xl font-bold mb-6">Metrics Dashboard</h1>
 
     <!-- Rates Section -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       <StatCard
         title="Cache Hit Rate"
         :value="formatPercentage(metrics?.rates?.cache_hit_rate || 0)"
@@ -16,6 +16,39 @@
         subtitle="Reviews completed successfully"
         :color="getSuccessColor(metrics?.rates?.success_rate || 0)"
       />
+      <StatCard
+        v-if="metrics?.quality"
+        title="Average Quality Score"
+        :value="formatPercentage(metrics.quality.average_score)"
+        subtitle="Review quality across all reviews"
+        :color="getQualityColor(metrics.quality.average_score)"
+      />
+    </div>
+
+    <!-- Quality Metrics Section -->
+    <div v-if="metrics?.quality" class="bg-white rounded-lg shadow p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-4">Review Quality Metrics</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="text-center">
+          <div class="text-sm text-gray-600 mb-2">Average Quality Score</div>
+          <div class="text-4xl font-bold" :class="getQualityColorClass(metrics.quality.average_score)">
+            {{ metrics.quality.average_score.toFixed(1) }}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">out of 100</div>
+        </div>
+        <div class="text-center">
+          <div class="text-sm text-gray-600 mb-2">Total Reviews Scored</div>
+          <div class="text-4xl font-bold text-blue-600">{{ metrics.quality.total_scores }}</div>
+          <div class="text-xs text-gray-500 mt-1">reviews with quality data</div>
+        </div>
+        <div class="text-center">
+          <div class="text-sm text-gray-600 mb-2">Quality Coverage</div>
+          <div class="text-4xl font-bold text-purple-600">
+            {{ formatPercentage((metrics.quality.total_scores / (metrics.reviews.total || 1)) * 100) }}
+          </div>
+          <div class="text-xs text-gray-500 mt-1">% of reviews with quality metrics</div>
+        </div>
+      </div>
     </div>
 
     <!-- Review Stats -->
@@ -114,6 +147,18 @@ const getCacheHitColor = (rate: number): string => {
 const getSuccessColor = (rate: number): string => {
   if (rate >= 95) return 'text-green-600';
   if (rate >= 90) return 'text-yellow-600';
+  return 'text-red-600';
+};
+
+const getQualityColor = (score: number): string => {
+  if (score >= 80) return 'text-green-600';
+  if (score >= 60) return 'text-yellow-600';
+  return 'text-red-600';
+};
+
+const getQualityColorClass = (score: number): string => {
+  if (score >= 80) return 'text-green-600';
+  if (score >= 60) return 'text-yellow-600';
   return 'text-red-600';
 };
 

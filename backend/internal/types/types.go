@@ -134,11 +134,23 @@ type ReviewComment struct {
 	Fix      string   `json:"fix,omitempty"`
 }
 
+// ReviewQualityMetrics represents quality metrics for a review
+type ReviewQualityMetrics struct {
+	Accuracy     float64 `json:"accuracy"`
+	Actionability float64 `json:"actionability"`
+	Coverage     float64 `json:"coverage"`
+	Precision    float64 `json:"precision"`
+	Recall       float64 `json:"recall"`
+	OverallScore float64 `json:"overallScore"`
+	Confidence   float64 `json:"confidence"`
+}
+
 // ReviewResult represents the result of a review
 type ReviewResult struct {
-	Recommendation ReviewRecommendation `json:"recommendation"`
-	Summary        ReviewSummary        `json:"summary"`
-	Comments       []ReviewComment      `json:"comments"`
+	Recommendation  ReviewRecommendation  `json:"recommendation"`
+	Summary         ReviewSummary         `json:"summary"`
+	Comments        []ReviewComment       `json:"comments"`
+	QualityMetrics *ReviewQualityMetrics `json:"qualityMetrics,omitempty"`
 }
 
 // ReviewSummary represents review statistics

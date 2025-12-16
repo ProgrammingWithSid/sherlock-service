@@ -77,10 +77,22 @@ type ReviewRequest struct {
 
 // ReviewResult represents the result from code-sherlock
 type ReviewResult struct {
-	Summary     string         `json:"summary"`
-	Stats       ReviewStats    `json:"stats"`
-	Comments   []ReviewComment `json:"comments"`
-	Recommendation string      `json:"recommendation"`
+	Summary        string              `json:"summary"`
+	Stats          ReviewStats         `json:"stats"`
+	Comments       []ReviewComment     `json:"comments"`
+	Recommendation string              `json:"recommendation"`
+	QualityMetrics *ReviewQualityMetrics `json:"qualityMetrics,omitempty"`
+}
+
+// ReviewQualityMetrics represents quality metrics for a review
+type ReviewQualityMetrics struct {
+	Accuracy      float64 `json:"accuracy"`
+	Actionability  float64 `json:"actionability"`
+	Coverage      float64 `json:"coverage"`
+	Precision     float64 `json:"precision"`
+	Recall        float64 `json:"recall"`
+	OverallScore  float64 `json:"overallScore"`
+	Confidence    float64 `json:"confidence"`
 }
 
 type ReviewStats struct {

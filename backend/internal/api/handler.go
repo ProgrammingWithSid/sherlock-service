@@ -606,5 +606,14 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	// Add quality metrics if available
+	if reviewMetrics.TotalQualityScores > 0 {
+		response["quality"] = map[string]interface{}{
+			"average_score":    reviewMetrics.AverageQualityScore,
+			"total_scores":    reviewMetrics.TotalQualityScores,
+			"score_percentage": reviewMetrics.AverageQualityScore,
+		}
+	}
+
 	render.JSON(w, r, response)
 }

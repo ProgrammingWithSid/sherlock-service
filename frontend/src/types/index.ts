@@ -59,10 +59,21 @@ export interface ReviewComment {
   fix?: string
 }
 
+export interface ReviewQualityMetrics {
+  accuracy: number
+  actionability: number
+  coverage: number
+  precision: number
+  recall: number
+  overallScore: number
+  confidence: number
+}
+
 export interface ReviewResult {
   recommendation: ReviewRecommendation
   summary: ReviewSummary
   comments: ReviewComment[]
+  qualityMetrics?: ReviewQualityMetrics
 }
 
 export interface ReviewSummary {
@@ -101,5 +112,3 @@ export interface RepoConfig {
     files?: string[]
   }
 }
-
-

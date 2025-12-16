@@ -81,6 +81,8 @@ onMounted(async () => {
     let totalIssues = 0
     let totalErrors = 0
     let totalFixed = 0
+    let qualityScores: number[] = []
+    let totalQualityScores = 0
 
     reviews.forEach((review) => {
       if (review.result) {
@@ -92,11 +94,26 @@ onMounted(async () => {
           if (review.status === 'completed' && result.summary?.errors === 0) {
             totalFixed++
           }
+          // Extract quality metrics if available
+          if (result.qualityMetrics?.overallScore) {
+            qualityScores.push(result.qualityMetrics.overallScore)
+            totalQualityScores++
+          }
         } catch (e) {
           // Ignore parse errors
         }
       }
     })
+
+    // Calculate average quality score
+    const averageQualityScore = qualityScores.length > 0
+      ? qualityScores.reduce((sum, score) => sum + score, 0) / qualityScores.length
+      : 0
+
+    // Use quality score if available, otherwise fallback to issue-based score
+    const finalScore = totalQualityScores > 0
+      ? Math.round(averageQualityScore)
+      : (totalIssues > 0 ? Math.round((1 - totalErrors / totalIssues) * 100) : 100)
 
     stats.value = {
       reviews: usageStats.reviews_this_month,
@@ -105,7 +122,7 @@ onMounted(async () => {
       issuesChange: 0,
       fixed: totalFixed,
       fixedChange: 0,
-      score: totalIssues > 0 ? Math.round((1 - totalErrors / totalIssues) * 100) : 100,
+      score: finalScore,
       scoreChange: 0,
     }
   } catch (err) {

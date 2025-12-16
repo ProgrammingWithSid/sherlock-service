@@ -16,9 +16,16 @@ export interface MetricsRates {
   success_rate: number;
 }
 
+export interface QualityMetrics {
+  average_score: number;
+  total_scores: number;
+  score_percentage: number;
+}
+
 export interface MetricsResponse {
   reviews: ReviewMetrics;
   rates: MetricsRates;
+  quality?: QualityMetrics;
 }
 
 export async function getMetrics(): Promise<MetricsResponse> {

@@ -23,20 +23,53 @@ func NewMetricsService(redisClient *redis.Client) *MetricsService {
 	}
 }
 
+// ReviewQualityMetrics represents quality metrics for a review
+type ReviewQualityMetrics struct {
+	Accuracy     float64
+	Actionability float64
+	Coverage     float64
+	Precision    float64
+	Recall       float64
+	OverallScore float64
+	Confidence   float64
+}
+
 // ReviewMetrics tracks review performance metrics
 type ReviewMetrics struct {
-	TotalReviews      int64
-	SuccessfulReviews int64
-	FailedReviews     int64
-	AverageDuration   float64
-	CacheHits         int64
-	CacheMisses       int64
+	TotalReviews       int64
+	SuccessfulReviews  int64
+	FailedReviews      int64
+	AverageDuration    float64
+	CacheHits          int64
+	CacheMisses        int64
 	IncrementalReviews int64
-	FullReviews       int64
+	FullReviews        int64
+	AverageQualityScore float64
+	TotalQualityScores  int64
+}
+
+// QualityMetricsHistory stores historical quality metrics
+type QualityMetricsHistory struct {
+	Timestamp    time.Time
+	OverallScore float64
+	Accuracy     float64
+	Actionability float64
+	Coverage     float64
 }
 
 // RecordReview records a review metric
 func (ms *MetricsService) RecordReview(duration time.Duration, success bool, usedCache bool, incremental bool) {
+	ms.RecordReviewWithQuality(duration, success, usedCache, incremental, nil)
+}
+
+// RecordReviewWithQuality records a review metric with quality metrics
+func (ms *MetricsService) RecordReviewWithQuality(
+	duration time.Duration,
+	success bool,
+	usedCache bool,
+	incremental bool,
+	qualityMetrics *ReviewQualityMetrics,
+) {
 	key := "metrics:reviews"
 
 	// Increment counters
@@ -68,6 +101,17 @@ func (ms *MetricsService) RecordReview(duration time.Duration, success bool, use
 	// Keep only last 1000 durations
 	pipe.ZRemRangeByRank(ms.ctx, key+":durations", 0, -1001)
 
+	// Record quality metrics if provided
+	if qualityMetrics != nil && qualityMetrics.OverallScore > 0 {
+		pipe.Incr(ms.ctx, key+":quality_scores_count")
+		pipe.ZAdd(ms.ctx, key+":quality_scores", &redis.Z{
+			Score:  float64(time.Now().Unix()),
+			Member: qualityMetrics.OverallScore,
+		})
+		// Keep only last 1000 quality scores
+		pipe.ZRemRangeByRank(ms.ctx, key+":quality_scores", 0, -1001)
+	}
+
 	if _, err := pipe.Exec(ms.ctx); err != nil {
 		log.Warn().Err(err).Msg("Failed to record review metrics")
 	}
@@ -86,6 +130,8 @@ func (ms *MetricsService) GetReviewMetrics() (*ReviewMetrics, error) {
 	incrementalCmd := pipe.Get(ms.ctx, key+":incremental")
 	fullCmd := pipe.Get(ms.ctx, key+":full")
 	durationsCmd := pipe.ZRange(ms.ctx, key+":durations", -1000, -1)
+	qualityScoresCountCmd := pipe.Get(ms.ctx, key+":quality_scores_count")
+	qualityScoresCmd := pipe.ZRange(ms.ctx, key+":quality_scores", -1000, -1)
 
 	if _, err := pipe.Exec(ms.ctx); err != nil && err != redis.Nil {
 		return nil, err
@@ -128,6 +174,25 @@ func (ms *MetricsService) GetReviewMetrics() (*ReviewMetrics, error) {
 		}
 		if count > 0 {
 			metrics.AverageDuration = float64(sum) / float64(count)
+		}
+	}
+
+	// Calculate average quality score
+	if val, err := qualityScoresCountCmd.Int64(); err == nil {
+		metrics.TotalQualityScores = val
+	}
+	qualityScores, err := qualityScoresCmd.Result()
+	if err == nil && len(qualityScores) > 0 {
+		var sum float64
+		count := 0
+		for _, score := range qualityScores {
+			if val, err := strconv.ParseFloat(score, 64); err == nil {
+				sum += val
+				count++
+			}
+		}
+		if count > 0 {
+			metrics.AverageQualityScore = sum / float64(count)
 		}
 	}
 

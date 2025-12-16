@@ -484,8 +484,8 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 
 	duration := int(time.Since(startTime).Milliseconds())
 
-	// Step 11: Record metrics
-	if wp.metricsService != nil {
+	// Step 11: Record metrics (only if quality metrics weren't already recorded)
+	if wp.metricsService != nil && result.QualityMetrics == nil {
 		reviewDuration := time.Since(startTime)
 		wp.metricsService.RecordReview(reviewDuration, true, usedCache, usedIncremental)
 		logger.Info().
@@ -584,6 +584,21 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 
 func (wp *WorkerPool) convertReviewResult(reviewResult *review.ReviewResult) types.ReviewResult {
 	comments := make([]types.ReviewComment, 0, len(reviewResult.Comments))
+
+	// Convert quality metrics if present
+	var qualityMetrics *types.ReviewQualityMetrics
+	if reviewResult.QualityMetrics != nil {
+		qualityMetrics = &types.ReviewQualityMetrics{
+			Accuracy:     reviewResult.QualityMetrics.Accuracy,
+			Actionability: reviewResult.QualityMetrics.Actionability,
+			Coverage:     reviewResult.QualityMetrics.Coverage,
+			Precision:    reviewResult.QualityMetrics.Precision,
+			Recall:       reviewResult.QualityMetrics.Recall,
+			OverallScore: reviewResult.QualityMetrics.OverallScore,
+			Confidence:   reviewResult.QualityMetrics.Confidence,
+		}
+	}
+
 	for _, c := range reviewResult.Comments {
 		severity := types.SeverityInfo
 		switch strings.ToLower(c.Severity) {
@@ -623,7 +638,7 @@ func (wp *WorkerPool) convertReviewResult(reviewResult *review.ReviewResult) typ
 		recommendation = types.RecommendationRequestChanges
 	}
 
-	return types.ReviewResult{
+	result := types.ReviewResult{
 		Recommendation: recommendation,
 		Summary: types.ReviewSummary{
 			TotalIssues: reviewResult.Stats.Errors + reviewResult.Stats.Warnings + reviewResult.Stats.Suggestions,
@@ -631,8 +646,10 @@ func (wp *WorkerPool) convertReviewResult(reviewResult *review.ReviewResult) typ
 			Warnings:    reviewResult.Stats.Warnings,
 			Suggestions: reviewResult.Stats.Suggestions,
 		},
-		Comments: comments,
+		Comments:        comments,
+		QualityMetrics:  qualityMetrics,
 	}
+	return result
 }
 
 func (wp *WorkerPool) postComments(job types.ReviewJob, result types.ReviewResult) error {
