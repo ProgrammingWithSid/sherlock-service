@@ -29,7 +29,15 @@ RUN go clean -cache -testcache || true && \
 # Final stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates git
+# Install Node.js, npm, and git (required for code-sherlock)
+RUN apk --no-cache add \
+    ca-certificates \
+    git \
+    nodejs \
+    npm
+
+# Install code-sherlock globally
+RUN npm install -g code-sherlock@latest
 
 WORKDIR /root/
 

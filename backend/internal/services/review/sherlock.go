@@ -261,7 +261,17 @@ async function runReview() {
           path.join(homeDir, '.nvm/versions/node', process.version, 'lib/node_modules/code-sherlock'),
           path.join('/usr/local/lib/node_modules/code-sherlock'),
           path.join('/opt/homebrew/lib/node_modules/code-sherlock'),
+          path.join('/usr/lib/node_modules/code-sherlock'), // Alpine Linux
           path.join(process.execPath.replace('bin/node', 'lib/node_modules/code-sherlock')),
+          // Try npm prefix path (works for Alpine and most Linux distros)
+          ...(function() {
+            try {
+              const npmPrefix = execSync('npm config get prefix', { encoding: 'utf8' }).trim();
+              return [path.join(npmPrefix, 'lib/node_modules/code-sherlock')];
+            } catch (e) {
+              return [];
+            }
+          })(),
         ];
 
         let found = false;
@@ -322,6 +332,7 @@ async function runReview() {
         fix: c.fix || '',
       })),
       recommendation: result.recommendation || 'COMMENT',
+      qualityMetrics: result.qualityMetrics || undefined,
     };
 
     console.log(JSON.stringify(output));
