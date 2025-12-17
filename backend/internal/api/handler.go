@@ -15,23 +15,26 @@ import (
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/queue"
 	repoconfig "github.com/sherlock/service/internal/services/config"
+	"github.com/sherlock/service/internal/services/analytics"
 	"github.com/sherlock/service/internal/services/metrics"
 	"github.com/sherlock/service/internal/types"
 )
 
 type Handler struct {
-	db             *database.DB
-	reviewQueue    *queue.ReviewQueue
-	config         *config.Config
-	metricsService *metrics.MetricsService
+	db              *database.DB
+	reviewQueue     *queue.ReviewQueue
+	config          *config.Config
+	metricsService  *metrics.MetricsService
+	analyticsService *analytics.AnalyticsService
 }
 
-func NewHandler(db *database.DB, reviewQueue *queue.ReviewQueue, cfg *config.Config, metricsService *metrics.MetricsService) *Handler {
+func NewHandler(db *database.DB, reviewQueue *queue.ReviewQueue, cfg *config.Config, metricsService *metrics.MetricsService, analyticsService *analytics.AnalyticsService) *Handler {
 	return &Handler{
-		db:             db,
-		reviewQueue:    reviewQueue,
-		config:         cfg,
-		metricsService: metricsService,
+		db:              db,
+		reviewQueue:     reviewQueue,
+		config:          cfg,
+		metricsService:  metricsService,
+		analyticsService: analyticsService,
 	}
 }
 
@@ -71,6 +74,14 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 	r.Route("/metrics", func(r chi.Router) {
 		r.Get("/", h.GetMetrics)
+	})
+
+	r.Route("/analytics", func(r chi.Router) {
+		r.Get("/quality-trends", h.GetQualityTrends)
+		r.Get("/issue-trends", h.GetIssueTrends)
+		r.Get("/severity-trends", h.GetSeverityTrends)
+		r.Get("/category-breakdown", h.GetCategoryBreakdown)
+		r.Get("/repository-comparison", h.GetRepositoryComparison)
 	})
 }
 
@@ -669,4 +680,164 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render.JSON(w, r, response)
+}
+
+func (h *Handler) GetQualityTrends(w http.ResponseWriter, r *http.Request) {
+	if h.analyticsService == nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, map[string]string{"error": "Analytics service not available"})
+		return
+	}
+
+	orgID := r.Header.Get("X-Org-ID")
+	if orgID == "" {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+		return
+	}
+
+	days := 30 // default to 30 days
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		if parsedDays, err := strconv.Atoi(daysStr); err == nil && parsedDays > 0 {
+			days = parsedDays
+		}
+	}
+
+	trends, err := h.analyticsService.GetQualityTrends(orgID, days)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get quality trends")
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to get quality trends"})
+		return
+	}
+
+	render.JSON(w, r, trends)
+}
+
+func (h *Handler) GetIssueTrends(w http.ResponseWriter, r *http.Request) {
+	if h.analyticsService == nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, map[string]string{"error": "Analytics service not available"})
+		return
+	}
+
+	orgID := r.Header.Get("X-Org-ID")
+	if orgID == "" {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+		return
+	}
+
+	days := 30
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		if parsedDays, err := strconv.Atoi(daysStr); err == nil && parsedDays > 0 {
+			days = parsedDays
+		}
+	}
+
+	trends, err := h.analyticsService.GetIssueTrends(orgID, days)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get issue trends")
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to get issue trends"})
+		return
+	}
+
+	render.JSON(w, r, trends)
+}
+
+func (h *Handler) GetSeverityTrends(w http.ResponseWriter, r *http.Request) {
+	if h.analyticsService == nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, map[string]string{"error": "Analytics service not available"})
+		return
+	}
+
+	orgID := r.Header.Get("X-Org-ID")
+	if orgID == "" {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+		return
+	}
+
+	days := 30
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		if parsedDays, err := strconv.Atoi(daysStr); err == nil && parsedDays > 0 {
+			days = parsedDays
+		}
+	}
+
+	trends, err := h.analyticsService.GetSeverityTrends(orgID, days)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get severity trends")
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to get severity trends"})
+		return
+	}
+
+	render.JSON(w, r, trends)
+}
+
+func (h *Handler) GetCategoryBreakdown(w http.ResponseWriter, r *http.Request) {
+	if h.analyticsService == nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, map[string]string{"error": "Analytics service not available"})
+		return
+	}
+
+	orgID := r.Header.Get("X-Org-ID")
+	if orgID == "" {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+		return
+	}
+
+	days := 30
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		if parsedDays, err := strconv.Atoi(daysStr); err == nil && parsedDays > 0 {
+			days = parsedDays
+		}
+	}
+
+	breakdown, err := h.analyticsService.GetIssueCategoryBreakdown(orgID, days)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get category breakdown")
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to get category breakdown"})
+		return
+	}
+
+	render.JSON(w, r, breakdown)
+}
+
+func (h *Handler) GetRepositoryComparison(w http.ResponseWriter, r *http.Request) {
+	if h.analyticsService == nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, map[string]string{"error": "Analytics service not available"})
+		return
+	}
+
+	orgID := r.Header.Get("X-Org-ID")
+	if orgID == "" {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+		return
+	}
+
+	days := 30
+	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
+		if parsedDays, err := strconv.Atoi(daysStr); err == nil && parsedDays > 0 {
+			days = parsedDays
+		}
+	}
+
+	comparison, err := h.analyticsService.GetRepositoryComparison(orgID, days)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get repository comparison")
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to get repository comparison"})
+		return
+	}
+
+	render.JSON(w, r, comparison)
 }
