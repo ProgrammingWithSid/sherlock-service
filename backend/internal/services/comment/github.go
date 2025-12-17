@@ -52,25 +52,62 @@ func (s *GitHubCommentService) PostReview(
 	validLines := make(map[string]map[int]bool)
 	for _, file := range prFiles {
 		if file.Patch == nil {
+			log.Debug().Str("file", *file.Filename).Msg("File has no patch, skipping")
 			continue
 		}
 		lines := s.parseValidLinesFromPatch(*file.Patch)
 		validLines[*file.Filename] = lines
+		log.Debug().
+			Str("file", *file.Filename).
+			Int("valid_lines", len(lines)).
+			Msg("Parsed valid lines from patch")
 	}
+
+	log.Info().
+		Int("pr_files", len(prFiles)).
+		Int("files_with_patch", len(validLines)).
+		Msg("PR files analyzed")
 
 	// Convert comments to GitHub format, filtering invalid line numbers
 	comments := make([]*github.DraftReviewComment, 0)
 	skippedComments := 0
+	skippedFileNotFound := 0
+	skippedInvalidLine := 0
+
 	for _, comment := range result.Comments {
-		// Check if line number is valid for this file
-		fileLines, exists := validLines[comment.File]
-		if !exists {
+		// Normalize file path for comparison (remove leading ./ if present)
+		commentFile := strings.TrimPrefix(comment.File, "./")
+		
+		// Try to find matching file (exact match or normalized)
+		var fileLines map[int]bool
+		var found bool
+		if lines, exists := validLines[comment.File]; exists {
+			fileLines = lines
+			found = true
+		} else if lines, exists := validLines[commentFile]; exists {
+			fileLines = lines
+			found = true
+		} else {
+			// Try reverse lookup - check if any PR file matches
+			for prFile, lines := range validLines {
+				if strings.HasSuffix(prFile, comment.File) || strings.HasSuffix(prFile, commentFile) {
+					fileLines = lines
+					found = true
+					break
+				}
+			}
+		}
+
+		if !found {
 			// File not in PR, skip inline comment
+			skippedFileNotFound++
 			skippedComments++
 			continue
 		}
+
 		if !fileLines[comment.Line] {
 			// Line number not in diff, skip inline comment
+			skippedInvalidLine++
 			skippedComments++
 			continue
 		}
@@ -85,10 +122,19 @@ func (s *GitHubCommentService) PostReview(
 		})
 	}
 
+	log.Info().
+		Int("total_comments", len(result.Comments)).
+		Int("valid_comments", len(comments)).
+		Int("skipped_file_not_found", skippedFileNotFound).
+		Int("skipped_invalid_line", skippedInvalidLine).
+		Int("total_skipped", skippedComments).
+		Msg("Comment validation complete")
+
 	// If we skipped many comments, add them to the review body
 	body := s.createReviewBody(result)
 	if skippedComments > 0 {
-		body += fmt.Sprintf("\n\n⚠️ Note: %d comment(s) could not be posted as inline comments (line numbers not in diff).", skippedComments)
+		body += fmt.Sprintf("\n\n⚠️ Note: %d comment(s) could not be posted as inline comments (%d file not found, %d invalid line numbers).", 
+			skippedComments, skippedFileNotFound, skippedInvalidLine)
 	}
 
 	// Determine review event
@@ -149,37 +195,58 @@ func (s *GitHubCommentService) postReviewWithoutValidation(
 // parseValidLinesFromPatch extracts valid line numbers from a git patch
 func (s *GitHubCommentService) parseValidLinesFromPatch(patch string) map[int]bool {
 	validLines := make(map[int]bool)
+	if patch == "" {
+		return validLines
+	}
+
 	lines := strings.Split(patch, "\n")
-	currentLine := 0
+	var currentNewLine int
+	var inHunk bool
 
 	for _, line := range lines {
+		// Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
 		if strings.HasPrefix(line, "@@") {
-			// Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
+			// Extract the +new_start,new_count part
+			// Format: @@ -old_start,old_count +new_start,new_count @@
+			// After splitting by space: ["@@", "-old_start,old_count", "+new_start,new_count", "@@"]
 			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				newPart := parts[1]
-				if strings.HasPrefix(newPart, "+") {
-					// Extract new_start
-					newPart = strings.TrimPrefix(newPart, "+")
+			for _, part := range parts {
+				if strings.HasPrefix(part, "+") && len(part) > 1 && !strings.HasPrefix(part, "+++") {
+					// Remove the + prefix
+					newPart := part[1:]
+					// Split by comma to get start and count
 					newParts := strings.Split(newPart, ",")
 					if len(newParts) > 0 {
 						if start, err := strconv.Atoi(newParts[0]); err == nil {
-							currentLine = start
+							currentNewLine = start
+							inHunk = true
+							break
 						}
 					}
 				}
 			}
-		} else if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			// Added line - this is a valid line number
-			validLines[currentLine] = true
-			currentLine++
+			continue
+		}
+
+		if !inHunk {
+			continue
+		}
+
+		// Process diff lines
+		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+			// Added line - this is a valid line number for comments
+			validLines[currentNewLine] = true
+			currentNewLine++
 		} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-			// Deleted line - don't increment currentLine
+			// Deleted line - don't increment new line counter
+			// These lines are not valid for inline comments on the new file
 			continue
 		} else if strings.HasPrefix(line, " ") {
-			// Context line - increment but don't mark as valid
-			currentLine++
+			// Context line (unchanged) - increment counter but don't mark as valid
+			// Comments can't be posted on unchanged lines
+			currentNewLine++
 		}
+		// Ignore other lines (file headers, etc.)
 	}
 
 	return validLines
