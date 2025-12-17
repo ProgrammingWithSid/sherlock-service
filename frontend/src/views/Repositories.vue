@@ -124,6 +124,8 @@ import { onMounted, ref } from 'vue'
 
 const reposStore = useRepositoriesStore()
 const showConnectModal = ref(false)
+const showConfigModal = ref(false)
+const selectedRepo = ref<Repository | null>(null)
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString)

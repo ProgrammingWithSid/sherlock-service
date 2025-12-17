@@ -95,37 +95,37 @@ jobs:
           fi
           echo "🔑 ECR Registry: $ECR_REGISTRY"
           echo "🚀 Deploying to EC2: ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }}"
-          
+
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "${{ env.EC2_USER }}@${{ secrets.EC2_HOST }}" "bash -s" << DEPLOY_EOF
           set -e
           export ECR_REGISTRY='$ECR_REGISTRY'
           cd sherlock-service || { echo "❌ Error: sherlock-service directory not found"; exit 1; }
-          
+
           echo "📥 Pulling latest code..."
           git fetch origin || true
           git reset --hard origin/main || true
-          
+
           echo "🔐 Logging into ECR..."
           aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin \$ECR_REGISTRY || { echo "❌ Error: Failed to login to ECR"; exit 1; }
-          
+
           echo "📦 Pulling latest images from ECR..."
           docker pull \$ECR_REGISTRY/sherlock-service/server:latest || echo "⚠️  Warning: Failed to pull server image"
           docker pull \$ECR_REGISTRY/sherlock-service/worker:latest || echo "⚠️  Warning: Failed to pull worker image"
           docker pull \$ECR_REGISTRY/sherlock-indexer:latest || echo "⚠️  Warning: Failed to pull rust-indexer image"
-          
+
           echo "🛑 Stopping existing services..."
           cd docker || exit 1
           docker-compose -f docker-compose.ecr.yml down || true
-          
+
           echo "🚀 Starting services with ECR images..."
           docker-compose -f docker-compose.ecr.yml up -d || { echo "❌ Error: Failed to start services"; exit 1; }
-          
+
           echo "⏳ Waiting for services to start..."
           sleep 10
-          
+
           echo "📊 Service status:"
           docker-compose -f docker-compose.ecr.yml ps
-          
+
           echo ""
           echo "✅ Deployment completed successfully!"
           DEPLOY_EOF

@@ -14,6 +14,7 @@ import (
 	"github.com/sherlock/service/internal/config"
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/queue"
+	repoconfig "github.com/sherlock/service/internal/services/config"
 	"github.com/sherlock/service/internal/services/metrics"
 	"github.com/sherlock/service/internal/types"
 )
@@ -296,9 +297,28 @@ func (h *Handler) GetRepoConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Use config loader to properly parse and return config with defaults
+	loader := repoconfig.NewLoader()
+	repoConfig, err := loader.LoadFromJSON(repo.Config)
+	if err != nil {
+		log.Warn().Err(err).Str("repo_id", repo.ID).Msg("Failed to parse repo config, using defaults")
+		// Load defaults by passing empty JSON
+		repoConfig, _ = loader.LoadFromJSON("{}")
+	}
+
+	// Convert to JSON for response
+	configJSON, err := json.Marshal(repoConfig)
+	if err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to marshal config"})
+		return
+	}
+
 	var config map[string]interface{}
-	if err := json.Unmarshal([]byte(repo.Config), &config); err != nil {
-		config = make(map[string]interface{})
+	if err := json.Unmarshal(configJSON, &config); err != nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, map[string]string{"error": "Failed to parse config"})
+		return
 	}
 
 	render.JSON(w, r, config)
@@ -344,7 +364,40 @@ func (h *Handler) UpdateRepoConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	configJSON, err := json.Marshal(config)
+	// Load existing config and merge with new values
+	loader := repoconfig.NewLoader()
+	existingConfig, err := loader.LoadFromJSON(repo.Config)
+	if err != nil {
+		log.Warn().Err(err).Str("repo_id", repo.ID).Msg("Failed to parse existing config, using defaults")
+		existingConfig, _ = loader.LoadFromJSON("{}")
+	}
+
+	// Update rules if provided
+	if rules, ok := config["rules"].([]interface{}); ok {
+		rulesStr := make([]string, 0, len(rules))
+		for _, r := range rules {
+			if ruleStr, ok := r.(string); ok && ruleStr != "" {
+				rulesStr = append(rulesStr, ruleStr)
+			}
+		}
+		existingConfig.Rules = rulesStr
+	}
+
+	// Update other config fields if provided (for future extensibility)
+	if aiConfig, ok := config["ai"].(map[string]interface{}); ok {
+		if existingConfig.AI == nil {
+			existingConfig.AI = &repoconfig.AIConfig{}
+		}
+		if provider, ok := aiConfig["provider"].(string); ok {
+			existingConfig.AI.Provider = provider
+		}
+		if model, ok := aiConfig["model"].(string); ok {
+			existingConfig.AI.Model = model
+		}
+	}
+
+	// Convert to JSON for storage
+	configJSON, err := json.Marshal(existingConfig)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": "Failed to marshal config"})
