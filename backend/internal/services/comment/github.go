@@ -153,7 +153,7 @@ func (s *GitHubCommentService) PostReview(
 					log.Info().Str("bot_user", *s.botLogin).Msg("Detected bot GitHub username")
 				}
 			}
-			
+
 			if s.botLogin != nil && pr.User.Login != nil && *pr.User.Login == *s.botLogin {
 				// Bot is the PR author, change REQUEST_CHANGES to COMMENT
 				log.Info().
