@@ -29,36 +29,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:latest
-            network=host
-
-      - name: Check Docker Hub connectivity
-        run: |
-          echo "🔍 Checking Docker Hub connectivity..."
-          max_attempts=5
-          attempt=1
-          while [ $attempt -le $max_attempts ]; do
-            if curl -f -s -o /dev/null -w "%{http_code}" https://auth.docker.io/token?service=registry.docker.io 2>/dev/null | grep -q "200\|401"; then
-              echo "✅ Docker Hub is accessible"
-              break
-            else
-              echo "⚠️ Docker Hub check failed (attempt $attempt/$max_attempts)"
-              if [ $attempt -lt $max_attempts ]; then
-                wait_time=$((attempt * 15))
-                echo "⏳ Waiting ${wait_time}s before retry..."
-                sleep $wait_time
-              fi
-              attempt=$((attempt + 1))
-            fi
-          done
-          if [ $attempt -gt $max_attempts ]; then
-            echo "⚠️ Warning: Docker Hub connectivity check failed, but continuing with build..."
-          fi
-
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -68,111 +38,30 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          retry_build() {
-            local max_attempts=3
-            local attempt=1
-            
-            while [ $attempt -le $max_attempts ]; do
-              echo "🔨 Build attempt $attempt/$max_attempts..."
-              if docker buildx build \
-                --platform linux/amd64 \
-                --file docker/Dockerfile \
-                --tag $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG \
-                --tag $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:latest \
-                --push \
-                --progress=plain \
-                . 2>&1; then
-                echo "✅ Build successful!"
-                return 0
-              else
-                echo "❌ Build failed (attempt $attempt/$max_attempts)"
-                if [ $attempt -lt $max_attempts ]; then
-                  wait_time=$((attempt * 30))
-                  echo "⏳ Waiting ${wait_time}s before retry..."
-                  sleep $wait_time
-                fi
-                attempt=$((attempt + 1))
-              fi
-            done
-            echo "❌ Build failed after $max_attempts attempts"
-            return 1
-          }
-          
-          retry_build
+          docker build -f docker/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:latest
 
       - name: Build and push worker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          retry_build() {
-            local max_attempts=3
-            local attempt=1
-            
-            while [ $attempt -le $max_attempts ]; do
-              echo "🔨 Build attempt $attempt/$max_attempts..."
-              if docker buildx build \
-                --platform linux/amd64 \
-                --file docker/Dockerfile.worker \
-                --tag $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG \
-                --tag $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest \
-                --push \
-                --progress=plain \
-                . 2>&1; then
-                echo "✅ Build successful!"
-                return 0
-              else
-                echo "❌ Build failed (attempt $attempt/$max_attempts)"
-                if [ $attempt -lt $max_attempts ]; then
-                  wait_time=$((attempt * 30))
-                  echo "⏳ Waiting ${wait_time}s before retry..."
-                  sleep $wait_time
-                fi
-                attempt=$((attempt + 1))
-              fi
-            done
-            echo "❌ Build failed after $max_attempts attempts"
-            return 1
-          }
-          
-          retry_build
+          docker build -f docker/Dockerfile.worker -t $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_WORKER:latest
 
       - name: Build and push Rust indexer image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          retry_build() {
-            local max_attempts=3
-            local attempt=1
-            
-            while [ $attempt -le $max_attempts ]; do
-              echo "🔨 Build attempt $attempt/$max_attempts..."
-              if docker buildx build \
-                --platform linux/amd64 \
-                --file rust-indexer/Dockerfile \
-                --tag $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:$IMAGE_TAG \
-                --tag $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:latest \
-                --push \
-                --progress=plain \
-                rust-indexer/ 2>&1; then
-                echo "✅ Build successful!"
-                return 0
-              else
-                echo "❌ Build failed (attempt $attempt/$max_attempts)"
-                if [ $attempt -lt $max_attempts ]; then
-                  wait_time=$((attempt * 30))
-                  echo "⏳ Waiting ${wait_time}s before retry..."
-                  sleep $wait_time
-                fi
-                attempt=$((attempt + 1))
-              fi
-            done
-            echo "❌ Build failed after $max_attempts attempts"
-            return 1
-          }
-          
-          retry_build
+          docker build -f rust-indexer/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:$IMAGE_TAG rust-indexer/
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_INDEXER:latest
 
       - name: Setup SSH
         run: |
