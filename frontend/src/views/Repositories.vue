@@ -116,10 +116,10 @@
 
 <script setup lang="ts">
 import ConnectRepoModal from '@/components/ConnectRepoModal.vue'
-import RepoConfigModal from '@/components/RepoConfigModal.vue'
-import type { Repository } from '@/types'
 import NavBar from '@/components/NavBar.vue'
+import RepoConfigModal from '@/components/RepoConfigModal.vue'
 import { useRepositoriesStore } from '@/stores/repositories'
+import type { Repository } from '@/types'
 import { onMounted, ref } from 'vue'
 
 const reposStore = useRepositoriesStore()

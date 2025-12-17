@@ -29,6 +29,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
     mem_limit: 128m
     mem_reservation: 64m
     healthcheck:

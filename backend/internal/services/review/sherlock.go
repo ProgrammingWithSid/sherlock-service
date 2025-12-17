@@ -77,11 +77,32 @@ type ReviewRequest struct {
 
 // ReviewResult represents the result from code-sherlock
 type ReviewResult struct {
-	Summary        string              `json:"summary"`
-	Stats          ReviewStats         `json:"stats"`
-	Comments       []ReviewComment     `json:"comments"`
-	Recommendation string              `json:"recommendation"`
-	QualityMetrics *ReviewQualityMetrics `json:"qualityMetrics,omitempty"`
+	Summary           string                `json:"summary"`
+	Stats             ReviewStats            `json:"stats"`
+	Comments          []ReviewComment        `json:"comments"`
+	Recommendation    string                 `json:"recommendation"`
+	QualityMetrics    *ReviewQualityMetrics  `json:"qualityMetrics,omitempty"`
+	NamingSuggestions []NamingSuggestion     `json:"namingSuggestions,omitempty"`
+	PRTitleSuggestion *PRTitleSuggestion    `json:"prTitleSuggestion,omitempty"`
+}
+
+// NamingSuggestion represents a suggestion for renaming an identifier
+type NamingSuggestion struct {
+	File          string `json:"file"`
+	Line          int    `json:"line"`
+	CurrentName   string `json:"currentName"`
+	SuggestedName string `json:"suggestedName"`
+	Type          string `json:"type"` // function, variable, class, interface, constant
+	Reason        string `json:"reason"`
+	Severity      string `json:"severity"`
+}
+
+// PRTitleSuggestion represents a suggestion for PR title
+type PRTitleSuggestion struct {
+	CurrentTitle   string   `json:"currentTitle,omitempty"`
+	SuggestedTitle string   `json:"suggestedTitle"`
+	Reason         string   `json:"reason"`
+	Alternatives   []string `json:"alternatives,omitempty"`
 }
 
 // ReviewQualityMetrics represents quality metrics for a review
@@ -333,6 +354,21 @@ async function runReview() {
       })),
       recommendation: result.recommendation || 'COMMENT',
       qualityMetrics: result.qualityMetrics || undefined,
+      namingSuggestions: (result.namingSuggestions || []).map(n => ({
+        file: n.file || '',
+        line: n.line || 0,
+        currentName: n.currentName || '',
+        suggestedName: n.suggestedName || '',
+        type: n.type || 'variable',
+        reason: n.reason || '',
+        severity: n.severity || 'suggestion',
+      })),
+      prTitleSuggestion: result.prTitleSuggestion ? {
+        currentTitle: result.prTitleSuggestion.currentTitle || undefined,
+        suggestedTitle: result.prTitleSuggestion.suggestedTitle || '',
+        reason: result.prTitleSuggestion.reason || '',
+        alternatives: result.prTitleSuggestion.alternatives || undefined,
+      } : undefined,
     };
 
     console.log(JSON.stringify(output));

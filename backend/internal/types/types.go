@@ -147,10 +147,31 @@ type ReviewQualityMetrics struct {
 
 // ReviewResult represents the result of a review
 type ReviewResult struct {
-	Recommendation  ReviewRecommendation  `json:"recommendation"`
-	Summary         ReviewSummary         `json:"summary"`
-	Comments        []ReviewComment       `json:"comments"`
-	QualityMetrics *ReviewQualityMetrics `json:"qualityMetrics,omitempty"`
+	Recommendation    ReviewRecommendation   `json:"recommendation"`
+	Summary           ReviewSummary          `json:"summary"`
+	Comments          []ReviewComment        `json:"comments"`
+	QualityMetrics    *ReviewQualityMetrics  `json:"qualityMetrics,omitempty"`
+	NamingSuggestions []NamingSuggestion     `json:"namingSuggestions,omitempty"`
+	PRTitleSuggestion *PRTitleSuggestion     `json:"prTitleSuggestion,omitempty"`
+}
+
+// NamingSuggestion represents a suggestion for renaming an identifier
+type NamingSuggestion struct {
+	File          string `json:"file"`
+	Line          int    `json:"line"`
+	CurrentName   string `json:"currentName"`
+	SuggestedName string `json:"suggestedName"`
+	Type          string `json:"type"` // function, variable, class, interface, constant
+	Reason        string `json:"reason"`
+	Severity      Severity `json:"severity"`
+}
+
+// PRTitleSuggestion represents a suggestion for PR title
+type PRTitleSuggestion struct {
+	CurrentTitle   string   `json:"currentTitle,omitempty"`
+	SuggestedTitle string   `json:"suggestedTitle"`
+	Reason         string   `json:"reason"`
+	Alternatives   []string `json:"alternatives,omitempty"`
 }
 
 // ReviewSummary represents review statistics
