@@ -74,24 +74,52 @@ func (s *CloneService) CreateWorktree(repoPath string, branch string, commitSHA 
 
 // RemoveWorktree removes a git worktree
 func (s *CloneService) RemoveWorktree(worktreePath string) error {
-	// Get the git directory
-	gitDir := filepath.Join(filepath.Dir(worktreePath), "..", ".git")
-	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		// Try alternative location
-		gitDir = filepath.Join(filepath.Dir(worktreePath), ".git")
+	// Check if worktree path exists
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		// Already removed, nothing to do
+		return nil
 	}
 
-	cmd := exec.Command("git", "-C", gitDir, "worktree", "remove", worktreePath, "--force")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Try to find the git directory from the worktree path
+	// Worktrees are typically in: repos/worktrees/{id}
+	// Git dir should be in: repos/{repo-id}/.git
+	worktreeDir := filepath.Dir(worktreePath)
+	reposDir := filepath.Dir(worktreeDir)
 
-	if err := cmd.Run(); err != nil {
-		log.Warn().Err(err).Str("worktree_path", worktreePath).Msg("Failed to remove worktree, cleaning up manually")
-		// Fallback to manual cleanup
-		return os.RemoveAll(worktreePath)
+	// Try to find the parent repo .git directory
+	var gitDir string
+	entries, err := os.ReadDir(reposDir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() && entry.Name() != "worktrees" {
+				potentialGitDir := filepath.Join(reposDir, entry.Name(), ".git")
+				if _, err := os.Stat(potentialGitDir); err == nil {
+					gitDir = potentialGitDir
+					break
+				}
+			}
+		}
 	}
 
-	log.Info().Str("worktree_path", worktreePath).Msg("Worktree removed")
+	// If we found a git dir, try to use git worktree remove
+	if gitDir != "" {
+		cmd := exec.Command("git", "-C", gitDir, "worktree", "remove", worktreePath, "--force")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Run(); err == nil {
+			log.Info().Str("worktree_path", worktreePath).Msg("Worktree removed")
+			return nil
+		}
+	}
+
+	// Fallback to manual cleanup
+	log.Warn().Str("worktree_path", worktreePath).Msg("Failed to remove worktree via git command, cleaning up manually")
+	if err := os.RemoveAll(worktreePath); err != nil {
+		return fmt.Errorf("failed to remove worktree directory: %w", err)
+	}
+
+	log.Info().Str("worktree_path", worktreePath).Msg("Worktree removed manually")
 	return nil
 }
 
@@ -179,5 +207,3 @@ func splitLines(s string) []string {
 
 	return lines
 }
-
-

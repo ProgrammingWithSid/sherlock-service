@@ -3,6 +3,7 @@ package comment
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v57/github"
@@ -40,32 +41,68 @@ func (s *GitHubCommentService) PostReview(
 ) error {
 	ctx := context.Background()
 
-	// Convert comments to GitHub format
-	comments := make([]*github.DraftReviewComment, 0, len(result.Comments))
+	// Get PR files to validate line numbers
+	prFiles, _, err := s.client.PullRequests.ListFiles(ctx, owner, repo, prNumber, &github.ListOptions{PerPage: 100})
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get PR files, posting comments without line validation")
+		return s.postReviewWithoutValidation(ctx, owner, repo, prNumber, headSHA, result)
+	}
+
+	// Build a map of valid line numbers per file
+	validLines := make(map[string]map[int]bool)
+	for _, file := range prFiles {
+		if file.Patch == nil {
+			continue
+		}
+		lines := s.parseValidLinesFromPatch(*file.Patch)
+		validLines[*file.Filename] = lines
+	}
+
+	// Convert comments to GitHub format, filtering invalid line numbers
+	comments := make([]*github.DraftReviewComment, 0)
+	skippedComments := 0
 	for _, comment := range result.Comments {
+		// Check if line number is valid for this file
+		fileLines, exists := validLines[comment.File]
+		if !exists {
+			// File not in PR, skip inline comment
+			skippedComments++
+			continue
+		}
+		if !fileLines[comment.Line] {
+			// Line number not in diff, skip inline comment
+			skippedComments++
+			continue
+		}
+
 		body := s.formatComment(comment)
+		side := "RIGHT" // New lines in the diff
 		comments = append(comments, &github.DraftReviewComment{
 			Path: &comment.File,
 			Line: &comment.Line,
+			Side: &side,
 			Body: &body,
 		})
+	}
+
+	// If we skipped many comments, add them to the review body
+	body := s.createReviewBody(result)
+	if skippedComments > 0 {
+		body += fmt.Sprintf("\n\n⚠️ Note: %d comment(s) could not be posted as inline comments (line numbers not in diff).", skippedComments)
 	}
 
 	// Determine review event
 	event := s.determineReviewEvent(result)
 
-	// Create review body
-	body := s.createReviewBody(result)
-
 	// Create review
 	review := &github.PullRequestReviewRequest{
 		CommitID: &headSHA,
-		Body:      &body,
-		Event:     &event,
-		Comments:  comments,
+		Body:     &body,
+		Event:    &event,
+		Comments: comments,
 	}
 
-	_, _, err := s.client.PullRequests.CreateReview(ctx, owner, repo, prNumber, review)
+	_, _, err = s.client.PullRequests.CreateReview(ctx, owner, repo, prNumber, review)
 	if err != nil {
 		return fmt.Errorf("failed to create PR review: %w", err)
 	}
@@ -76,9 +113,76 @@ func (s *GitHubCommentService) PostReview(
 		Int("pr_number", prNumber).
 		Str("event", event).
 		Int("comments", len(comments)).
+		Int("skipped", skippedComments).
 		Msg("PR review posted")
 
 	return nil
+}
+
+// postReviewWithoutValidation posts review without validating line numbers (fallback)
+func (s *GitHubCommentService) postReviewWithoutValidation(
+	ctx context.Context,
+	owner string,
+	repo string,
+	prNumber int,
+	headSHA string,
+	result *types.ReviewResult,
+) error {
+	// Post as general comment instead of inline comments
+	body := s.createReviewBody(result)
+	body += "\n\n### All Comments\n\n"
+	for _, comment := range result.Comments {
+		body += fmt.Sprintf("**%s:%d** - %s\n\n", comment.File, comment.Line, comment.Message)
+	}
+
+	event := s.determineReviewEvent(result)
+	review := &github.PullRequestReviewRequest{
+		CommitID: &headSHA,
+		Body:     &body,
+		Event:    &event,
+	}
+
+	_, _, err := s.client.PullRequests.CreateReview(ctx, owner, repo, prNumber, review)
+	return err
+}
+
+// parseValidLinesFromPatch extracts valid line numbers from a git patch
+func (s *GitHubCommentService) parseValidLinesFromPatch(patch string) map[int]bool {
+	validLines := make(map[int]bool)
+	lines := strings.Split(patch, "\n")
+	currentLine := 0
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "@@") {
+			// Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				newPart := parts[1]
+				if strings.HasPrefix(newPart, "+") {
+					// Extract new_start
+					newPart = strings.TrimPrefix(newPart, "+")
+					newParts := strings.Split(newPart, ",")
+					if len(newParts) > 0 {
+						if start, err := strconv.Atoi(newParts[0]); err == nil {
+							currentLine = start
+						}
+					}
+				}
+			}
+		} else if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+			// Added line - this is a valid line number
+			validLines[currentLine] = true
+			currentLine++
+		} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+			// Deleted line - don't increment currentLine
+			continue
+		} else if strings.HasPrefix(line, " ") {
+			// Context line - increment but don't mark as valid
+			currentLine++
+		}
+	}
+
+	return validLines
 }
 
 // PostComment posts a simple comment to a PR
@@ -177,5 +281,3 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult) stri
 
 	return strings.Join(parts, "\n")
 }
-
-
