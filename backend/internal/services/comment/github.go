@@ -13,8 +13,9 @@ import (
 )
 
 type GitHubCommentService struct {
-	client *github.Client
-	token  string
+	client   *github.Client
+	token    string
+	botLogin *string // Cached bot login name
 }
 
 func NewGitHubCommentService(token string) *GitHubCommentService {
@@ -144,17 +145,22 @@ func (s *GitHubCommentService) PostReview(
 	if event == "REQUEST_CHANGES" {
 		pr, _, err := s.client.PullRequests.Get(ctx, owner, repo, prNumber)
 		if err == nil && pr.User != nil {
-			// Get current user (bot) from token
-			currentUser, _, err := s.client.Users.Get(ctx, "")
-			if err == nil && currentUser.Login != nil {
-				if pr.User.Login != nil && *pr.User.Login == *currentUser.Login {
-					// Bot is the PR author, change REQUEST_CHANGES to COMMENT
-					log.Info().
-						Str("pr_author", *pr.User.Login).
-						Str("bot_user", *currentUser.Login).
-						Msg("Bot is PR author, changing REQUEST_CHANGES to COMMENT")
-					event = "COMMENT"
+			// Get current user (bot) from token (cache it)
+			if s.botLogin == nil {
+				currentUser, _, err := s.client.Users.Get(ctx, "")
+				if err == nil && currentUser.Login != nil {
+					s.botLogin = currentUser.Login
+					log.Info().Str("bot_user", *s.botLogin).Msg("Detected bot GitHub username")
 				}
+			}
+			
+			if s.botLogin != nil && pr.User.Login != nil && *pr.User.Login == *s.botLogin {
+				// Bot is the PR author, change REQUEST_CHANGES to COMMENT
+				log.Info().
+					Str("pr_author", *pr.User.Login).
+					Str("bot_user", *s.botLogin).
+					Msg("Bot is PR author, changing REQUEST_CHANGES to COMMENT")
+				event = "COMMENT"
 			}
 		}
 	}
