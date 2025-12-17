@@ -26,15 +26,11 @@ type Config struct {
 	GitHubAppID          int64
 	GitHubPrivateKeyPath string
 	GitHubWebhookSecret  string
-	GitHubClientID       string
-	GitHubClientSecret   string
 
 	// GitLab
-	GitLabToken       string
-	GitLabClientID    string
-	GitLabClientSecret string
+	GitLabToken string
 
-	// OAuth
+	// Base URL for callbacks and webhooks
 	BaseURL string
 
 	// AI Provider
@@ -78,12 +74,8 @@ func Load() *Config {
 		GitHubAppID:          getEnvInt64("GITHUB_APP_ID", 0),
 		GitHubPrivateKeyPath:  getEnv("GITHUB_PRIVATE_KEY_PATH", ""),
 		GitHubWebhookSecret:   getEnv("GITHUB_WEBHOOK_SECRET", ""),
-		GitHubClientID:        getEnv("GITHUB_CLIENT_ID", ""),
-		GitHubClientSecret:    getEnv("GITHUB_CLIENT_SECRET", ""),
 
-		GitLabToken:       getEnv("GITLAB_TOKEN", ""),
-		GitLabClientID:    getEnv("GITLAB_CLIENT_ID", ""),
-		GitLabClientSecret: getEnv("GITLAB_CLIENT_SECRET", ""),
+		GitLabToken: getEnv("GITLAB_TOKEN", ""),
 
 		BaseURL: getEnv("BASE_URL", "http://localhost:3000"),
 

@@ -129,14 +129,7 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 
 	// Auth routes (public)
 	r.Route("/api/v1", func(r chi.Router) {
-		authHandler := api.NewAuthHandler(
-			db,
-			cfg.GitHubClientID,
-			cfg.GitHubClientSecret,
-			cfg.GitLabClientID,
-			cfg.GitLabClientSecret,
-			cfg.BaseURL,
-		)
+		authHandler := api.NewAuthHandler(db)
 		authHandler.RegisterRoutes(r)
 
 		// Protected API routes

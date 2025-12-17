@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -147,6 +148,14 @@ func (h *WebhookHandler) HandleGitHubWebhook(w http.ResponseWriter, r *http.Requ
 	}
 
 	switch eventType {
+	case "installation":
+		// Handle GitHub App installation events
+		if err := h.handleInstallation(payload); err != nil {
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, map[string]string{"error": err.Error()})
+			return
+		}
+
 	case "pull_request":
 		action, ok := payload["action"].(string)
 		if !ok {
@@ -179,6 +188,119 @@ func (h *WebhookHandler) HandleGitLabWebhook(w http.ResponseWriter, r *http.Requ
 	render.JSON(w, r, map[string]string{"error": "GitLab webhooks not yet implemented"})
 }
 
+// handleInstallation handles GitHub App installation events
+func (h *WebhookHandler) handleInstallation(payload map[string]interface{}) error {
+	action, ok := payload["action"].(string)
+	if !ok {
+		return fmt.Errorf("invalid installation action")
+	}
+
+	installationData, ok := payload["installation"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid installation data")
+	}
+
+	installationIDFloat, ok := installationData["id"].(float64)
+	if !ok {
+		return fmt.Errorf("invalid installation ID")
+	}
+	installationID := int64(installationIDFloat)
+
+	accountData, ok := installationData["account"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid account data")
+	}
+
+	accountLogin, ok := accountData["login"].(string)
+	if !ok {
+		return fmt.Errorf("invalid account login")
+	}
+
+	log.Info().
+		Str("action", action).
+		Int64("installation_id", installationID).
+		Str("account", accountLogin).
+		Msg("Processing GitHub App installation event")
+
+	switch action {
+	case "created":
+		// New installation - create organization and installation record
+		slug := sanitizeSlug(accountLogin)
+		if slug == "" {
+			slug = fmt.Sprintf("org-%d", installationID)
+		}
+
+		// Try to find existing organization by slug
+		org, err := h.db.GetOrganizationBySlug(slug)
+		if err != nil {
+			// Create new organization
+			org, err = h.db.CreateOrganization(accountLogin, slug)
+			if err != nil {
+				return fmt.Errorf("failed to create organization: %w", err)
+			}
+			log.Info().Str("org_id", org.ID).Str("slug", slug).Msg("Created organization for GitHub App installation")
+		}
+
+		// Create or update installation record
+		// Token will be fetched when needed using TokenService
+		err = h.db.CreateOrUpdateInstallation(org.ID, installationID, "", nil)
+		if err != nil {
+			return fmt.Errorf("failed to create installation record: %w", err)
+		}
+
+		log.Info().
+			Str("org_id", org.ID).
+			Int64("installation_id", installationID).
+			Msg("GitHub App installation created")
+
+	case "deleted":
+		// Installation removed - mark as inactive (don't delete to preserve history)
+		inst, err := h.db.GetInstallationByID(installationID)
+		if err != nil {
+			log.Warn().Err(err).Int64("installation_id", installationID).Msg("Installation not found for deletion")
+			return nil // Not an error if already deleted
+		}
+
+		log.Info().
+			Str("org_id", inst.OrgID).
+			Int64("installation_id", installationID).
+			Msg("GitHub App installation deleted")
+
+	case "suspend", "unsuspend":
+		// Installation suspended/unsuspended
+		log.Info().
+			Str("action", action).
+			Int64("installation_id", installationID).
+			Msg("GitHub App installation status changed")
+	}
+
+	return nil
+}
+
+// sanitizeSlug converts a string to a URL-friendly slug
+func sanitizeSlug(input string) string {
+	// Convert to lowercase
+	slug := strings.ToLower(input)
+
+	// Remove special characters, keep only alphanumeric and hyphens
+	reg := regexp.MustCompile("[^a-z0-9-]")
+	slug = reg.ReplaceAllString(slug, "-")
+
+	// Remove multiple consecutive hyphens
+	reg = regexp.MustCompile("-+")
+	slug = reg.ReplaceAllString(slug, "-")
+
+	// Remove leading/trailing hyphens
+	slug = strings.Trim(slug, "-")
+
+	// Limit length
+	if len(slug) > 50 {
+		slug = slug[:50]
+	}
+
+	return slug
+}
+
 func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}) error {
 	prData, ok := payload["pull_request"].(map[string]interface{})
 	if !ok {
@@ -195,7 +317,7 @@ func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}) error
 		return fmt.Errorf("invalid repository full_name")
 	}
 
-	// Try to get organization from installation (GitHub App) or repository (OAuth)
+	// Get organization from GitHub App installation
 	var org *types.Organization
 	var err error
 
@@ -231,23 +353,10 @@ func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}) error
 			return fmt.Errorf("organization not found: %w", err)
 		}
 	} else {
-		// OAuth-based webhook - find repository and get org from it
-		log.Info().Str("repo", repoFullName).Msg("OAuth webhook - looking up repository")
-
-		repo, err := h.db.GetRepositoryByFullName(repoFullName)
-		if err != nil {
-			return fmt.Errorf("repository %s not found - please connect it first via OAuth", repoFullName)
-		}
-
-		if !repo.IsActive {
-			log.Info().Str("repo", repoFullName).Msg("Repository is paused, skipping review")
-			return nil // Silently skip paused repositories
-		}
-
-		org, err = h.db.GetOrganizationByID(repo.OrgID)
-		if err != nil {
-			return fmt.Errorf("organization not found: %w", err)
-		}
+		// GitHub App installation not found in payload
+		// This should not happen with GitHub App webhooks
+		log.Warn().Str("repo", repoFullName).Msg("GitHub App installation not found in webhook payload")
+		return fmt.Errorf("GitHub App installation required - please install the app on repository %s", repoFullName)
 	}
 
 	// Check plan limits
