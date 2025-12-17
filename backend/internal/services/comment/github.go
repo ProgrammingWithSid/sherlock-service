@@ -77,7 +77,7 @@ func (s *GitHubCommentService) PostReview(
 	for _, comment := range result.Comments {
 		// Normalize file path for comparison (remove leading ./ if present)
 		commentFile := strings.TrimPrefix(comment.File, "./")
-		
+
 		// Try to find matching file (exact match or normalized)
 		var fileLines map[int]bool
 		var found bool
@@ -133,12 +133,31 @@ func (s *GitHubCommentService) PostReview(
 	// If we skipped many comments, add them to the review body
 	body := s.createReviewBody(result)
 	if skippedComments > 0 {
-		body += fmt.Sprintf("\n\n⚠️ Note: %d comment(s) could not be posted as inline comments (%d file not found, %d invalid line numbers).", 
+		body += fmt.Sprintf("\n\n⚠️ Note: %d comment(s) could not be posted as inline comments (%d file not found, %d invalid line numbers).",
 			skippedComments, skippedFileNotFound, skippedInvalidLine)
 	}
 
 	// Determine review event
 	event := s.determineReviewEvent(result)
+
+	// Check if bot is the PR author - GitHub doesn't allow REQUEST_CHANGES on own PRs
+	if event == "REQUEST_CHANGES" {
+		pr, _, err := s.client.PullRequests.Get(ctx, owner, repo, prNumber)
+		if err == nil && pr.User != nil {
+			// Get current user (bot) from token
+			currentUser, _, err := s.client.Users.Get(ctx, "")
+			if err == nil && currentUser.Login != nil {
+				if pr.User.Login != nil && *pr.User.Login == *currentUser.Login {
+					// Bot is the PR author, change REQUEST_CHANGES to COMMENT
+					log.Info().
+						Str("pr_author", *pr.User.Login).
+						Str("bot_user", *currentUser.Login).
+						Msg("Bot is PR author, changing REQUEST_CHANGES to COMMENT")
+					event = "COMMENT"
+				}
+			}
+		}
+	}
 
 	// Create review
 	review := &github.PullRequestReviewRequest{
@@ -150,7 +169,16 @@ func (s *GitHubCommentService) PostReview(
 
 	_, _, err = s.client.PullRequests.CreateReview(ctx, owner, repo, prNumber, review)
 	if err != nil {
-		return fmt.Errorf("failed to create PR review: %w", err)
+		// If error is about requesting changes on own PR, retry with COMMENT
+		if strings.Contains(err.Error(), "Can not request changes on your own pull request") {
+			log.Warn().Msg("Cannot request changes on own PR, retrying with COMMENT event")
+			event = "COMMENT"
+			review.Event = &event
+			_, _, err = s.client.PullRequests.CreateReview(ctx, owner, repo, prNumber, review)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to create PR review: %w", err)
+		}
 	}
 
 	log.Info().
