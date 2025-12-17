@@ -71,9 +71,8 @@ func (s *GitHubCommentService) PostReview(
 
 	// Convert comments to GitHub format, filtering invalid line numbers
 	comments := make([]*github.DraftReviewComment, 0)
-	skippedComments := 0
-	skippedFileNotFound := 0
-	skippedInvalidLine := 0
+	var skippedFileNotFound []types.ReviewComment
+	var skippedInvalidLine []types.ReviewComment
 
 	for _, comment := range result.Comments {
 		// Normalize file path for comparison (remove leading ./ if present)
@@ -101,15 +100,13 @@ func (s *GitHubCommentService) PostReview(
 
 		if !found {
 			// File not in PR, skip inline comment
-			skippedFileNotFound++
-			skippedComments++
+			skippedFileNotFound = append(skippedFileNotFound, comment)
 			continue
 		}
 
 		if !fileLines[comment.Line] {
 			// Line number not in diff, skip inline comment
-			skippedInvalidLine++
-			skippedComments++
+			skippedInvalidLine = append(skippedInvalidLine, comment)
 			continue
 		}
 
@@ -123,20 +120,18 @@ func (s *GitHubCommentService) PostReview(
 		})
 	}
 
+	skippedComments := len(skippedFileNotFound) + len(skippedInvalidLine)
+
 	log.Info().
 		Int("total_comments", len(result.Comments)).
 		Int("valid_comments", len(comments)).
-		Int("skipped_file_not_found", skippedFileNotFound).
-		Int("skipped_invalid_line", skippedInvalidLine).
+		Int("skipped_file_not_found", len(skippedFileNotFound)).
+		Int("skipped_invalid_line", len(skippedInvalidLine)).
 		Int("total_skipped", skippedComments).
 		Msg("Comment validation complete")
 
-	// If we skipped many comments, add them to the review body
-	body := s.createReviewBody(result)
-	if skippedComments > 0 {
-		body += fmt.Sprintf("\n\n⚠️ Note: %d comment(s) could not be posted as inline comments (%d file not found, %d invalid line numbers).",
-			skippedComments, skippedFileNotFound, skippedInvalidLine)
-	}
+	// Create review body with skipped comments in collapsed sections
+	body := s.createReviewBody(result, skippedFileNotFound, skippedInvalidLine)
 
 	// Determine review event
 	event := s.determineReviewEvent(result)
@@ -193,7 +188,8 @@ func (s *GitHubCommentService) PostReview(
 		Int("pr_number", prNumber).
 		Str("event", event).
 		Int("comments", len(comments)).
-		Int("skipped", skippedComments).
+		Int("skipped_file_not_found", len(skippedFileNotFound)).
+		Int("skipped_invalid_line", len(skippedInvalidLine)).
 		Msg("PR review posted")
 
 	return nil
@@ -209,7 +205,7 @@ func (s *GitHubCommentService) postReviewWithoutValidation(
 	result *types.ReviewResult,
 ) error {
 	// Post as general comment instead of inline comments
-	body := s.createReviewBody(result)
+	body := s.createReviewBody(result, nil, nil)
 	body += "\n\n### All Comments\n\n"
 	for _, comment := range result.Comments {
 		body += fmt.Sprintf("**%s:%d** - %s\n\n", comment.File, comment.Line, comment.Message)
@@ -352,7 +348,7 @@ func (s *GitHubCommentService) determineReviewEvent(result *types.ReviewResult) 
 	}
 }
 
-func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult) string {
+func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult, skippedFileNotFound []types.ReviewComment, skippedInvalidLine []types.ReviewComment) string {
 	var parts []string
 
 	parts = append(parts, "## 📊 Review Summary")
@@ -377,8 +373,69 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult) stri
 		parts = append(parts, "")
 	}
 
+	// Add skipped comments in collapsed sections
+	totalSkipped := len(skippedFileNotFound) + len(skippedInvalidLine)
+	if totalSkipped > 0 {
+		parts = append(parts, "---")
+		parts = append(parts, "")
+		parts = append(parts, fmt.Sprintf("⚠️ **Note:** %d comment(s) could not be posted as inline comments due to platform limitations.", totalSkipped))
+		parts = append(parts, "")
+
+		// Outside diff range comments (file not found)
+		if len(skippedFileNotFound) > 0 {
+			parts = append(parts, "<details>")
+			parts = append(parts, "<summary>⚠️ Outside diff range comments ("+fmt.Sprintf("%d", len(skippedFileNotFound))+")</summary>")
+			parts = append(parts, "")
+			parts = append(parts, "These comments reference files that are not part of this PR's diff:")
+			parts = append(parts, "")
+			for _, comment := range skippedFileNotFound {
+				severityEmoji := s.getSeverityEmoji(comment.Severity)
+				parts = append(parts, fmt.Sprintf("- %s **%s** in `%s:%d`", severityEmoji, strings.ToUpper(string(comment.Severity)), comment.File, comment.Line))
+				parts = append(parts, fmt.Sprintf("  - %s", comment.Message))
+				if comment.Category != "" {
+					parts = append(parts, fmt.Sprintf("  - Category: `%s`", comment.Category))
+				}
+				parts = append(parts, "")
+			}
+			parts = append(parts, "</details>")
+			parts = append(parts, "")
+		}
+
+		// Invalid line number comments
+		if len(skippedInvalidLine) > 0 {
+			parts = append(parts, "<details>")
+			parts = append(parts, "<summary>⚠️ Invalid line number comments ("+fmt.Sprintf("%d", len(skippedInvalidLine))+")</summary>")
+			parts = append(parts, "")
+			parts = append(parts, "These comments reference line numbers that are not in the diff:")
+			parts = append(parts, "")
+			for _, comment := range skippedInvalidLine {
+				severityEmoji := s.getSeverityEmoji(comment.Severity)
+				parts = append(parts, fmt.Sprintf("- %s **%s** in `%s:%d`", severityEmoji, strings.ToUpper(string(comment.Severity)), comment.File, comment.Line))
+				parts = append(parts, fmt.Sprintf("  - %s", comment.Message))
+				if comment.Category != "" {
+					parts = append(parts, fmt.Sprintf("  - Category: `%s`", comment.Category))
+				}
+				parts = append(parts, "")
+			}
+			parts = append(parts, "</details>")
+			parts = append(parts, "")
+		}
+	}
+
 	parts = append(parts, "---")
 	parts = append(parts, "💬 Reply with `@sherlock help` for available commands")
 
 	return strings.Join(parts, "\n")
+}
+
+func (s *GitHubCommentService) getSeverityEmoji(severity types.Severity) string {
+	severityEmoji := map[types.Severity]string{
+		types.SeverityError:   "🔴",
+		types.SeverityWarning: "🟡",
+		types.SeverityInfo:    "💡",
+	}
+	if emoji, ok := severityEmoji[severity]; ok {
+		return emoji
+	}
+	return "💡"
 }
