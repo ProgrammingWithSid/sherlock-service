@@ -143,6 +143,28 @@ func (db *DB) ClearClaimToken(orgID string) error {
 	return nil
 }
 
+// GenerateClaimToken generates a new claim token for an organization
+func (db *DB) GenerateClaimToken(orgID string) (string, error) {
+	// Generate secure random token (64 characters)
+	token := uuid.New().String() + uuid.New().String()
+	expires := time.Now().Add(7 * 24 * time.Hour) // Token expires in 7 days
+
+	query := `
+		UPDATE organizations
+		SET claim_token = $1, claim_token_expires = $2, updated_at = NOW()
+		WHERE id = $3
+		RETURNING claim_token
+	`
+
+	var resultToken string
+	err := db.conn.QueryRow(query, token, expires, orgID).Scan(&resultToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate claim token: %w", err)
+	}
+
+	return resultToken, nil
+}
+
 func (db *DB) UpdateOrganizationPlan(id string, plan types.Plan, subscriptionID *string) error {
 	now := time.Now()
 	query := `

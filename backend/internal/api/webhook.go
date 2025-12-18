@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -242,6 +243,30 @@ func (h *WebhookHandler) handleInstallation(payload map[string]interface{}) erro
 				Str("slug", slug).
 				Str("claim_token", *org.ClaimToken).
 				Msg("Created organization for GitHub App installation")
+		} else {
+			// Organization exists - generate or regenerate claim token for new installation
+			// Check if organization has a valid claim token
+			needsToken := org.ClaimToken == nil || org.ClaimTokenExpires == nil || org.ClaimTokenExpires.Before(time.Now())
+			if needsToken {
+				claimToken, err := h.db.GenerateClaimToken(org.ID)
+				if err != nil {
+					log.Warn().Err(err).Str("org_id", org.ID).Msg("Failed to generate claim token")
+				} else {
+					log.Info().
+						Str("org_id", org.ID).
+						Str("claim_token", claimToken).
+						Msg("Generated new claim token for existing organization")
+					// Update org object for logging
+					org.ClaimToken = &claimToken
+					expires := time.Now().Add(7 * 24 * time.Hour)
+					org.ClaimTokenExpires = &expires
+				}
+			} else {
+				log.Info().
+					Str("org_id", org.ID).
+					Str("claim_token", *org.ClaimToken).
+					Msg("Using existing valid claim token")
+			}
 		}
 
 		// Create or update installation record

@@ -408,26 +408,37 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Try to find organization by installation ID to get claim token
 	// Note: Installation might not exist yet if webhook hasn't processed it
-	inst, err := h.db.GetInstallationByID(installationID)
+	// Retry a few times with small delays to wait for webhook processing
 	var claimToken string
 	var orgSlug string
+	maxRetries := 5
+	retryDelay := 500 * time.Millisecond
 
-	if err == nil {
-		// Installation exists, get organization
-		org, err := h.db.GetOrganizationByID(inst.OrgID)
-		if err == nil && org.ClaimToken != nil && org.ClaimTokenExpires != nil {
-			// Check if token is still valid
-			if org.ClaimTokenExpires.After(time.Now()) {
-				claimToken = *org.ClaimToken
-				orgSlug = org.Slug
+	for i := 0; i < maxRetries; i++ {
+		inst, err := h.db.GetInstallationByID(installationID)
+		if err == nil {
+			// Installation exists, get organization
+			org, err := h.db.GetOrganizationByID(inst.OrgID)
+			if err == nil && org.ClaimToken != nil && org.ClaimTokenExpires != nil {
+				// Check if token is still valid
+				if org.ClaimTokenExpires.After(time.Now()) {
+					claimToken = *org.ClaimToken
+					orgSlug = org.Slug
+					break
+				}
 			}
 		}
-	} else {
-		// Installation not found yet - webhook might still be processing
-		// User should wait a moment and check back, or check webhook logs
+
+		// If not found and not last retry, wait and try again
+		if i < maxRetries-1 {
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// Last retry failed
 		log.Info().
 			Int64("installation_id", installationID).
-			Msg("Installation not found yet, webhook may still be processing")
+			Msg("Installation not found after retries, webhook may still be processing")
 	}
 
 	// Return success response with claim token if available
