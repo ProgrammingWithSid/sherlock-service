@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/types"
 )
@@ -31,6 +33,7 @@ func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 		r.Get("/me", h.GetCurrentUser)
 		r.Get("/organizations", h.ListOrganizations)
 		r.Post("/logout", h.Logout)
+		r.Get("/github/callback", h.GitHubCallback)
 	})
 }
 
@@ -316,6 +319,63 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 func generateSessionToken() string {
 	return uuid.New().String()
+}
+
+// GitHubCallback handles GitHub App installation callback
+// This is called when a user installs the GitHub App on their repository
+func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
+	// Extract query parameters
+	installationIDStr := r.URL.Query().Get("installation_id")
+	setupAction := r.URL.Query().Get("setup_action")
+	code := r.URL.Query().Get("code")
+
+	log.Info().
+		Str("installation_id", installationIDStr).
+		Str("setup_action", setupAction).
+		Str("code", code).
+		Msg("GitHub App installation callback received")
+
+	// Validate installation_id
+	if installationIDStr == "" {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, map[string]string{"error": "Missing installation_id"})
+		return
+	}
+
+	installationID, err := strconv.ParseInt(installationIDStr, 10, 64)
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, map[string]string{"error": "Invalid installation_id"})
+		return
+	}
+
+	// Check if setup_action is "install"
+	if setupAction != "install" {
+		log.Warn().
+			Str("setup_action", setupAction).
+			Msg("Unexpected setup_action in callback")
+	}
+
+	// Check if installation already exists
+	_, err = h.db.GetInstallationByID(installationID)
+	if err != nil {
+		// Installation not found - it will be created via webhook
+		// But we can log it here for reference
+		log.Info().
+			Int64("installation_id", installationID).
+			Msg("Installation callback received, waiting for webhook to create record")
+	}
+
+	// Return success response
+	// The actual installation processing happens via webhook
+	response := map[string]interface{}{
+		"status":          "success",
+		"message":         "GitHub App installation received",
+		"installation_id": installationID,
+		"note":            "Installation will be processed via webhook. You can close this page.",
+	}
+
+	render.JSON(w, r, response)
 }
 
 func sanitizeSlug(input string) string {
