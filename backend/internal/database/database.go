@@ -237,7 +237,7 @@ func (db *DB) migrate() error {
 			) THEN
 				ALTER TABLE review_feedback ADD COLUMN updated_at TIMESTAMP DEFAULT NOW();
 			END IF;
-			
+
 			IF NOT EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'feedback'
@@ -259,21 +259,21 @@ func (db *DB) migrate() error {
 			) THEN
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_review ON review_feedback(review_id);
 			END IF;
-			
+
 			IF EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'user_id'
 			) THEN
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_user ON review_feedback(user_id);
 			END IF;
-			
+
 			IF EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'org_id'
 			) THEN
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_org ON review_feedback(org_id);
 			END IF;
-			
+
 			IF EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'file_path'
@@ -283,14 +283,14 @@ func (db *DB) migrate() error {
 			) THEN
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_file_line ON review_feedback(file_path, line_number);
 			END IF;
-			
+
 			IF EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'feedback'
 			) THEN
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_feedback ON review_feedback(feedback);
 			END IF;
-			
+
 			IF EXISTS (
 				SELECT 1 FROM information_schema.columns
 				WHERE table_name = 'review_feedback' AND column_name = 'created_at'
