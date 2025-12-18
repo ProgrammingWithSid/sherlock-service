@@ -2,13 +2,11 @@ package github
 
 import (
 	"crypto/rsa"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/go-github/v57/github"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 )
 

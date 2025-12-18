@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/sherlock/service/internal/services/comment"
 	repoconfig "github.com/sherlock/service/internal/services/config"
 	"github.com/sherlock/service/internal/services/git"
+	"github.com/sherlock/service/internal/services/github"
 	"github.com/sherlock/service/internal/services/indexer"
 	"github.com/sherlock/service/internal/services/metrics"
 	"github.com/sherlock/service/internal/services/review"
@@ -40,6 +42,7 @@ type WorkerPool struct {
 	incrementalReviewSvc  *review.IncrementalReviewService
 	codebaseIndexer       *indexer.CodebaseIndexer
 	metricsService        *metrics.MetricsService
+	tokenService          *github.TokenService
 }
 
 func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconfig.Config, redisClient *redis.Client) *WorkerPool {
@@ -157,6 +160,20 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 	// Initialize metrics service
 	metricsService := metrics.NewMetricsService(redisClient)
 
+	// Initialize GitHub token service (if GitHub App is configured)
+	var tokenService *github.TokenService
+	if cfg.GitHubAppID > 0 && cfg.GitHubPrivateKeyPath != "" {
+		privateKeyData, err := os.ReadFile(cfg.GitHubPrivateKeyPath)
+		if err != nil {
+			log.Warn().Err(err).Str("path", cfg.GitHubPrivateKeyPath).Msg("Failed to read GitHub private key, token refresh will not work")
+		} else {
+			tokenService, err = github.NewTokenService(cfg.GitHubAppID, privateKeyData)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to initialize GitHub token service, token refresh will not work")
+			}
+		}
+	}
+
 	return &WorkerPool{
 		server:              reviewQueue.GetServer(),
 		db:                  db,
@@ -170,6 +187,7 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 		incrementalReviewSvc: incrementalReviewSvc,
 		codebaseIndexer:     codebaseIndexer,
 		metricsService:      metricsService,
+		tokenService:         tokenService,
 	}
 }
 
@@ -569,13 +587,42 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 		config.GlobalRules = repoConfig.Rules
 	}
 
-	// Get GitHub token from installation
+	// Get GitHub token from installation (refresh if needed)
 	if job.Platform == types.PlatformGitHub {
 		inst, err := wp.db.GetInstallationByOrgID(job.OrgID)
-		if err == nil && inst.Token != "" {
-			config.GitHub = &review.GitHubConfig{
-				Token: inst.Token,
+		if err == nil {
+			token := inst.Token
+			
+			// Refresh token if expired or missing
+			if wp.tokenService != nil {
+				if token == "" || inst.TokenExpires == nil || time.Until(*inst.TokenExpires) < 5*time.Minute {
+					log.Info().Int64("installation_id", inst.InstallationID).Msg("Refreshing GitHub installation token")
+					newToken, newExpiresAt, err := wp.tokenService.GetInstallationTokenWithRefresh(
+						inst.InstallationID,
+						token,
+						inst.TokenExpires,
+					)
+					if err != nil {
+						log.Warn().Err(err).Int64("installation_id", inst.InstallationID).Msg("Failed to refresh GitHub token")
+					} else {
+						token = newToken
+						// Update token in database
+						if updateErr := wp.db.UpdateInstallationToken(inst.InstallationID, newToken, newExpiresAt); updateErr != nil {
+							log.Warn().Err(updateErr).Int64("installation_id", inst.InstallationID).Msg("Failed to update token in database")
+						}
+					}
+				}
 			}
+			
+			if token != "" {
+				config.GitHub = &review.GitHubConfig{
+					Token: token,
+				}
+			} else {
+				log.Warn().Int64("installation_id", inst.InstallationID).Msg("GitHub token is empty, review may fail to post comments")
+			}
+		} else {
+			log.Warn().Err(err).Str("org_id", job.OrgID).Msg("Failed to get GitHub installation")
 		}
 	}
 
