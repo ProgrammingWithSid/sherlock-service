@@ -1,14 +1,19 @@
 <template>
   <div class="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-md w-full space-y-8">
-      <div>
-        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Create your organization
-        </h2>
-        <p class="mt-2 text-center text-sm text-gray-600">
-          Sign up to start using Code-Sherlock
-        </p>
-      </div>
+        <div>
+          <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            {{ isClaimingOrg ? 'Claim Your Organization' : 'Create your organization' }}
+          </h2>
+          <p class="mt-2 text-center text-sm text-gray-600">
+            {{ isClaimingOrg ? 'Complete your account setup to access your organization dashboard' : 'Sign up to start using Code-Sherlock' }}
+          </p>
+          <div v-if="isClaimingOrg" class="mt-3 bg-blue-50 border border-blue-200 rounded-md p-3">
+            <p class="text-sm text-blue-800">
+              ✓ You're claiming an organization created via GitHub App installation
+            </p>
+          </div>
+        </div>
 
       <form class="mt-8 space-y-6" @submit.prevent="handleSignup">
         <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4">
@@ -53,7 +58,7 @@
             />
           </div>
 
-          <div>
+          <div v-if="!isClaimingOrg">
             <label for="org_name" class="block text-sm font-medium text-gray-700">Organization Name</label>
             <input
               id="org_name"
@@ -65,7 +70,7 @@
             />
           </div>
 
-          <div>
+          <div v-if="!isClaimingOrg">
             <label for="org_slug" class="block text-sm font-medium text-gray-700">Organization Slug (optional)</label>
             <input
               id="org_slug"
@@ -106,15 +111,18 @@
 import { authAPI } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationStore } from '@/stores/organization'
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const orgStore = useOrganizationStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
+const claimToken = ref<string>('')
+const isClaimingOrg = ref(false)
 
 const form = ref({
   name: '',
@@ -124,18 +132,39 @@ const form = ref({
   orgSlug: '',
 })
 
+// Extract claim_token from URL if present
+onMounted(() => {
+  const token = route.query.claim_token as string
+  if (token) {
+    claimToken.value = token
+    isClaimingOrg.value = true
+  }
+})
+
 const handleSignup = async (): Promise<void> => {
   loading.value = true
   error.value = null
 
   try {
-    const response = await authAPI.signup({
+    // Build signup request - use claim_token if claiming, otherwise use org_name/org_slug
+    const signupData: any = {
       name: form.value.name,
       email: form.value.email,
       password: form.value.password,
-      org_name: form.value.orgName,
-      org_slug: form.value.orgSlug,
-    })
+    }
+
+    if (isClaimingOrg.value && claimToken.value) {
+      // Claiming existing organization
+      signupData.claim_token = claimToken.value
+    } else {
+      // Creating new organization
+      signupData.org_name = form.value.orgName
+      if (form.value.orgSlug) {
+        signupData.org_slug = form.value.orgSlug
+      }
+    }
+
+    const response = await authAPI.signup(signupData)
 
     // Set auth
     await authStore.setAuth(response.token, response.user.org_id)

@@ -13,8 +13,9 @@ export interface SignupRequest {
   name: string
   email: string
   password: string
-  org_name: string
+  org_name?: string
   org_slug?: string
+  claim_token?: string
 }
 
 export interface SignupResponse {
