@@ -411,7 +411,7 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	inst, err := h.db.GetInstallationByID(installationID)
 	var claimToken string
 	var orgSlug string
-	
+
 	if err == nil {
 		// Installation exists, get organization
 		org, err := h.db.GetOrganizationByID(inst.OrgID)

@@ -18,10 +18,10 @@ func (db *DB) CreateOrganization(name string, slug string) (*types.Organization,
 func (db *DB) CreateOrganizationWithClaimToken(name string, slug string, generateToken bool) (*types.Organization, error) {
 	id := uuid.New().String()
 	now := time.Now()
-	
+
 	var claimToken *string
 	var claimTokenExpires *time.Time
-	
+
 	if generateToken {
 		// Generate secure random token (32 bytes = 64 hex characters)
 		token := uuid.New().String() + uuid.New().String() // 64 character token
