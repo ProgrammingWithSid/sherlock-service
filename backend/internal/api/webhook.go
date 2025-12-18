@@ -53,12 +53,14 @@ func (h *WebhookHandler) RegisterRoutes(r chi.Router) {
 func (h *WebhookHandler) HandleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	eventType := r.Header.Get("X-GitHub-Event")
 	signature := r.Header.Get("X-Hub-Signature-256")
+	installationTargetID := r.Header.Get("X-GitHub-Hook-Installation-Target-ID")
 
 	log.Info().
 		Str("event_type", eventType).
 		Str("method", r.Method).
 		Str("path", r.URL.Path).
 		Int64("content_length", r.ContentLength).
+		Str("installation_target_id", installationTargetID).
 		Msg("Received GitHub webhook")
 
 	body, err := io.ReadAll(r.Body)
@@ -165,7 +167,7 @@ func (h *WebhookHandler) HandleGitHubWebhook(w http.ResponseWriter, r *http.Requ
 		}
 
 		if action == "opened" || action == "synchronize" || action == "reopened" {
-			if err := h.handlePullRequest(payload); err != nil {
+			if err := h.handlePullRequest(payload, r); err != nil {
 				render.Status(r, http.StatusInternalServerError)
 				render.JSON(w, r, map[string]string{"error": err.Error()})
 				return
@@ -305,7 +307,7 @@ func (h *WebhookHandler) handleInstallation(payload map[string]interface{}) erro
 	return nil
 }
 
-func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}) error {
+func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}, r *http.Request) error {
 	prData, ok := payload["pull_request"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid pull_request data")
@@ -357,10 +359,31 @@ func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}) error
 			return fmt.Errorf("organization not found: %w", err)
 		}
 	} else {
-		// GitHub App installation not found in payload
-		// This should not happen with GitHub App webhooks
-		log.Warn().Str("repo", repoFullName).Msg("GitHub App installation not found in webhook payload")
-		return fmt.Errorf("GitHub App installation required - please install the app on repository %s", repoFullName)
+		// GitHub App installation not found in payload - try to find via repository
+		log.Warn().Str("repo", repoFullName).Msg("GitHub App installation not found in webhook payload, trying to find via repository")
+		
+		// Try to find repository in our database
+		repo, err := h.db.GetRepositoryByFullName(repoFullName)
+		if err != nil {
+			return fmt.Errorf("repository %s not found. Please connect it first or ensure GitHub App is installed", repoFullName)
+		}
+
+		// Get organization from repository
+		org, err = h.db.GetOrganizationByID(repo.OrgID)
+		if err != nil {
+			return fmt.Errorf("organization not found for repository: %w", err)
+		}
+
+		// Verify organization has an installation
+		_, err = h.db.GetInstallationByOrgID(org.ID)
+		if err != nil {
+			return fmt.Errorf("GitHub App installation not found for organization. Please install the app on repository %s", repoFullName)
+		}
+
+		log.Info().
+			Str("repo", repoFullName).
+			Str("org_id", org.ID).
+			Msg("Found organization via repository lookup")
 	}
 
 	// Check plan limits
