@@ -60,9 +60,30 @@ func (db *DB) migrate() error {
 			stripe_subscription_id VARCHAR(255),
 			plan_activated_at TIMESTAMP,
 			global_rules TEXT DEFAULT '[]',
+			claim_token VARCHAR(255),
+			claim_token_expires TIMESTAMP,
 			created_at TIMESTAMP DEFAULT NOW(),
 			updated_at TIMESTAMP DEFAULT NOW()
 		)`,
+		// Migration: Add claim_token columns if they don't exist
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'organizations' AND column_name = 'claim_token'
+			) THEN
+				ALTER TABLE organizations ADD COLUMN claim_token VARCHAR(255);
+			END IF;
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'organizations' AND column_name = 'claim_token_expires'
+			) THEN
+				ALTER TABLE organizations ADD COLUMN claim_token_expires TIMESTAMP;
+			END IF;
+		EXCEPTION
+			WHEN duplicate_column THEN
+				NULL;
+		END $$;`,
 		`CREATE TABLE IF NOT EXISTS repositories (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

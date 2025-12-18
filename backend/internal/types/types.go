@@ -82,14 +82,16 @@ type User struct {
 
 // Organization represents an organization
 type Organization struct {
-	ID                   string    `json:"id" db:"id"`
-	Name                 string    `json:"name" db:"name"`
-	Slug                 string    `json:"slug" db:"slug"`
-	Plan                 Plan      `json:"plan" db:"plan"`
-	StripeCustomerID     *string   `json:"stripe_customer_id,omitempty" db:"stripe_customer_id"`
-	StripeSubscriptionID *string   `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
+	ID                   string     `json:"id" db:"id"`
+	Name                 string     `json:"name" db:"name"`
+	Slug                 string     `json:"slug" db:"slug"`
+	Plan                 Plan       `json:"plan" db:"plan"`
+	StripeCustomerID     *string    `json:"stripe_customer_id,omitempty" db:"stripe_customer_id"`
+	StripeSubscriptionID *string    `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
 	PlanActivatedAt      *time.Time `json:"plan_activated_at,omitempty" db:"plan_activated_at"`
-	GlobalRules          string    `json:"global_rules" db:"global_rules"` // JSON array of strings
+	GlobalRules          string     `json:"global_rules" db:"global_rules"` // JSON array of strings
+	ClaimToken           *string    `json:"claim_token,omitempty" db:"claim_token"`
+	ClaimTokenExpires    *time.Time `json:"claim_token_expires,omitempty" db:"claim_token_expires"`
 	CreatedAt            time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at" db:"updated_at"`
 }

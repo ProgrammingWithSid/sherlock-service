@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -87,7 +88,7 @@ type SignupRequest struct {
 	Name       string `json:"name"`
 	OrgName    string `json:"org_name"`
 	OrgSlug    string `json:"org_slug"`
-	LinkToOrg  bool   `json:"link_to_org"` // If true, link to existing org instead of creating new one
+	ClaimToken string `json:"claim_token"` // Required when linking to existing org created via GitHub App
 }
 
 // Signup handles user and organization signup
@@ -109,18 +110,34 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	var org *types.Organization
 	var err error
 
-	// If linking to existing organization
-	if req.LinkToOrg && req.OrgSlug != "" {
+	// If claiming existing organization (created via GitHub App)
+	if req.ClaimToken != "" {
+		// Validate claim token
+		org, err = h.db.ValidateClaimToken(req.ClaimToken)
+		if err != nil {
+			render.Status(r, http.StatusUnauthorized)
+			render.JSON(w, r, map[string]string{"error": "Invalid or expired claim token. Please use the token provided after installing the GitHub App."})
+			return
+		}
+
+		// Clear the claim token after successful validation (one-time use)
+		// We'll clear it after user is created successfully
+	} else if req.OrgSlug != "" {
+		// Legacy: linking by slug (less secure, but kept for backward compatibility)
 		// Try to find existing organization by slug
 		org, err = h.db.GetOrganizationBySlug(req.OrgSlug)
 		if err != nil {
 			render.Status(r, http.StatusNotFound)
-			render.JSON(w, r, map[string]string{"error": "Organization not found. Please check the organization slug or create a new account."})
+			render.JSON(w, r, map[string]string{"error": "Organization not found. Please use the claim token provided after installing the GitHub App, or create a new account."})
 			return
 		}
 
-		// Organization found - allow user to link to it
-		// Multiple users can belong to the same organization
+		// Check if organization has a claim token (means it was created via GitHub App)
+		if org.ClaimToken != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, map[string]string{"error": "This organization requires a claim token. Please use the token provided after installing the GitHub App."})
+			return
+		}
 	} else {
 		// Create new organization
 		if req.OrgName == "" {
@@ -138,12 +155,12 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Create organization
-		org, err = h.db.CreateOrganization(req.OrgName, slug)
+		// Create new organization (no claim token for manual signups)
+		org, err = h.db.CreateOrganizationWithClaimToken(req.OrgName, slug, false)
 		if err != nil {
 			// If slug exists, try with UUID
 			slug = fmt.Sprintf("%s-%s", slug, uuid.New().String()[:8])
-			org, err = h.db.CreateOrganization(req.OrgName, slug)
+			org, err = h.db.CreateOrganizationWithClaimToken(req.OrgName, slug, false)
 			if err != nil {
 				render.Status(r, http.StatusInternalServerError)
 				render.JSON(w, r, map[string]string{"error": "Failed to create organization"})
@@ -158,6 +175,14 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": "Failed to create user"})
 		return
+	}
+
+	// Clear claim token after successful user creation (one-time use)
+	if req.ClaimToken != "" {
+		if err := h.db.ClearClaimToken(org.ID); err != nil {
+			log.Warn().Err(err).Str("org_id", org.ID).Msg("Failed to clear claim token")
+			// Don't fail the signup if token clearing fails
+		}
 	}
 
 	// Create session token
@@ -381,23 +406,44 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 			Msg("Unexpected setup_action in callback")
 	}
 
-	// Check if installation already exists
-	_, err = h.db.GetInstallationByID(installationID)
-	if err != nil {
-		// Installation not found - it will be created via webhook
-		// But we can log it here for reference
+	// Try to find organization by installation ID to get claim token
+	// Note: Installation might not exist yet if webhook hasn't processed it
+	inst, err := h.db.GetInstallationByID(installationID)
+	var claimToken string
+	var orgSlug string
+	
+	if err == nil {
+		// Installation exists, get organization
+		org, err := h.db.GetOrganizationByID(inst.OrgID)
+		if err == nil && org.ClaimToken != nil && org.ClaimTokenExpires != nil {
+			// Check if token is still valid
+			if org.ClaimTokenExpires.After(time.Now()) {
+				claimToken = *org.ClaimToken
+				orgSlug = org.Slug
+			}
+		}
+	} else {
+		// Installation not found yet - webhook might still be processing
+		// User should wait a moment and check back, or check webhook logs
 		log.Info().
 			Int64("installation_id", installationID).
-			Msg("Installation callback received, waiting for webhook to create record")
+			Msg("Installation not found yet, webhook may still be processing")
 	}
 
-	// Return success response
-	// The actual installation processing happens via webhook
+	// Return success response with claim token if available
 	response := map[string]interface{}{
 		"status":          "success",
 		"message":         "GitHub App installation received",
 		"installation_id": installationID,
-		"note":            "Installation will be processed via webhook. You can close this page.",
+		"note":            "Installation will be processed via webhook. Use the claim token below to access your dashboard.",
+	}
+
+	if claimToken != "" {
+		response["claim_token"] = claimToken
+		response["org_slug"] = orgSlug
+		response["dashboard_url"] = fmt.Sprintf("https://app.algovesh.com/signup?claim_token=%s", claimToken)
+	} else {
+		response["note"] = "Installation will be processed via webhook. Check your email or contact support for your claim token."
 	}
 
 	render.JSON(w, r, response)

@@ -232,12 +232,16 @@ func (h *WebhookHandler) handleInstallation(payload map[string]interface{}) erro
 		// Try to find existing organization by slug
 		org, err := h.db.GetOrganizationBySlug(slug)
 		if err != nil {
-			// Create new organization
-			org, err = h.db.CreateOrganization(accountLogin, slug)
+			// Create new organization with claim token for GitHub App installation
+			org, err = h.db.CreateOrganizationWithClaimToken(accountLogin, slug, true)
 			if err != nil {
 				return fmt.Errorf("failed to create organization: %w", err)
 			}
-			log.Info().Str("org_id", org.ID).Str("slug", slug).Msg("Created organization for GitHub App installation")
+			log.Info().
+				Str("org_id", org.ID).
+				Str("slug", slug).
+				Str("claim_token", *org.ClaimToken).
+				Msg("Created organization for GitHub App installation")
 		}
 
 		// Create or update installation record
