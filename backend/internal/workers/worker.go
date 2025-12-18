@@ -628,15 +628,21 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 		}
 
 		token := inst.Token
-		log.Debug().
+		log.Info().
 			Int64("installation_id", inst.InstallationID).
 			Bool("has_token", token != "").
 			Bool("has_token_expires", inst.TokenExpires != nil).
 			Bool("has_token_service", wp.tokenService != nil).
+			Str("org_id", job.OrgID).
 			Msg("Installation found, checking token")
 
 		// Refresh token if expired or missing
-		if wp.tokenService != nil {
+		if wp.tokenService == nil {
+			log.Error().
+				Int64("installation_id", inst.InstallationID).
+				Str("org_id", job.OrgID).
+				Msg("TokenService is nil - cannot refresh token. Check GITHUB_APP_ID and GITHUB_PRIVATE_KEY_PATH environment variables")
+		} else {
 			needsRefresh := token == "" || inst.TokenExpires == nil || (inst.TokenExpires != nil && time.Until(*inst.TokenExpires) < 5*time.Minute)
 			if needsRefresh {
 				log.Info().Int64("installation_id", inst.InstallationID).Msg("Refreshing GitHub installation token")
@@ -646,15 +652,17 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 					inst.TokenExpires,
 				)
 				if err != nil {
-					log.Warn().Err(err).Int64("installation_id", inst.InstallationID).Msg("Failed to refresh GitHub token")
+					log.Error().Err(err).Int64("installation_id", inst.InstallationID).Msg("Failed to refresh GitHub token")
 				} else {
 					token = newToken
-					log.Info().Int64("installation_id", inst.InstallationID).Msg("Token refreshed successfully")
+					log.Info().Int64("installation_id", inst.InstallationID).Bool("has_new_token", token != "").Msg("Token refreshed successfully")
 					// Update token in database
 					if updateErr := wp.db.UpdateInstallationToken(inst.InstallationID, newToken, newExpiresAt); updateErr != nil {
 						log.Warn().Err(updateErr).Int64("installation_id", inst.InstallationID).Msg("Failed to update token in database")
 					}
 				}
+			} else {
+				log.Debug().Int64("installation_id", inst.InstallationID).Msg("Token is still valid, no refresh needed")
 			}
 		}
 
@@ -662,6 +670,13 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 			config.GitHub = &review.GitHubConfig{
 				Token: token,
 			}
+			log.Debug().Int64("installation_id", inst.InstallationID).Msg("GitHub token added to review config")
+		} else {
+			log.Error().
+				Int64("installation_id", inst.InstallationID).
+				Str("org_id", job.OrgID).
+				Bool("has_token_service", wp.tokenService != nil).
+				Msg("GitHub token is empty after refresh attempt")
 		}
 	} else if job.Platform == types.PlatformGitLab {
 		// For GitLab, check if token is available
