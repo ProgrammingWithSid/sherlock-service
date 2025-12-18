@@ -171,6 +171,14 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_code_symbols_name ON code_symbols(repo_id, symbol_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_code_symbols_type ON code_symbols(symbol_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_code_symbols_deps ON code_symbols USING GIN(dependencies)`,
+		// Function to update updated_at timestamp (must be created before triggers)
+		`CREATE OR REPLACE FUNCTION update_updated_at_column()
+		RETURNS TRIGGER AS $$
+		BEGIN
+			NEW.updated_at = NOW();
+			RETURN NEW;
+		END;
+		$$ language 'plpgsql'`,
 		`DROP TRIGGER IF EXISTS update_code_symbols_updated_at ON code_symbols`,
 		`CREATE TRIGGER update_code_symbols_updated_at
 		BEFORE UPDATE ON code_symbols
@@ -290,14 +298,6 @@ func (db *DB) migrate() error {
 				CREATE INDEX IF NOT EXISTS idx_review_feedback_created ON review_feedback(created_at);
 			END IF;
 		END $$;`,
-		// Function to update updated_at timestamp
-		`CREATE OR REPLACE FUNCTION update_updated_at_column()
-		RETURNS TRIGGER AS $$
-		BEGIN
-			NEW.updated_at = NOW();
-			RETURN NEW;
-		END;
-		$$ language 'plpgsql'`,
 		// Trigger to update updated_at on review_feedback
 		`DROP TRIGGER IF EXISTS update_review_feedback_updated_at ON review_feedback`,
 		`CREATE TRIGGER update_review_feedback_updated_at
