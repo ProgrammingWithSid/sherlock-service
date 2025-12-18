@@ -423,6 +423,7 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult, skip
 	}
 
 	parts = append(parts, "---")
+	parts = append(parts, "")
 	parts = append(parts, "💬 Reply with `@sherlock help` for available commands")
 
 	return strings.Join(parts, "\n")
