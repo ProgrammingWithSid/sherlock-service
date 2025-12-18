@@ -68,6 +68,9 @@ services:
       - RUST_INDEXER_URL=http://rust-indexer:8081
     env_file:
       - ../backend/.env
+    volumes:
+      # Mount backend directory to access private key file
+      - ../backend:/home/ubuntu/sherlock-service/backend:ro
     mem_limit: 512m
     mem_reservation: 256m
     depends_on:
