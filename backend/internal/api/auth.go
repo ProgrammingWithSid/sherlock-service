@@ -87,6 +87,7 @@ type SignupRequest struct {
 	Name       string `json:"name"`
 	OrgName    string `json:"org_name"`
 	OrgSlug    string `json:"org_slug"`
+	LinkToOrg  bool   `json:"link_to_org"` // If true, link to existing org instead of creating new one
 }
 
 // Signup handles user and organization signup
@@ -99,31 +100,55 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate input
-	if req.Email == "" || req.Password == "" || req.Name == "" || req.OrgName == "" {
+	if req.Email == "" || req.Password == "" || req.Name == "" {
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, map[string]string{"error": "All fields are required"})
+		render.JSON(w, r, map[string]string{"error": "Email, password, and name are required"})
 		return
 	}
 
-	// Generate slug if not provided
-	slug := req.OrgSlug
-	if slug == "" {
-		slug = sanitizeSlug(req.OrgName)
-		if slug == "" {
-			slug = uuid.New().String()[:8]
-		}
-	}
+	var org *types.Organization
+	var err error
 
-	// Create organization
-	org, err := h.db.CreateOrganization(req.OrgName, slug)
-	if err != nil {
-		// If slug exists, try with UUID
-		slug = fmt.Sprintf("%s-%s", slug, uuid.New().String()[:8])
+	// If linking to existing organization
+	if req.LinkToOrg && req.OrgSlug != "" {
+		// Try to find existing organization by slug
+		org, err = h.db.GetOrganizationBySlug(req.OrgSlug)
+		if err != nil {
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, map[string]string{"error": "Organization not found. Please check the organization slug or create a new account."})
+			return
+		}
+
+		// Organization found - allow user to link to it
+		// Multiple users can belong to the same organization
+	} else {
+		// Create new organization
+		if req.OrgName == "" {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, map[string]string{"error": "Organization name is required when creating a new organization"})
+			return
+		}
+
+		// Generate slug if not provided
+		slug := req.OrgSlug
+		if slug == "" {
+			slug = sanitizeSlug(req.OrgName)
+			if slug == "" {
+				slug = uuid.New().String()[:8]
+			}
+		}
+
+		// Create organization
 		org, err = h.db.CreateOrganization(req.OrgName, slug)
 		if err != nil {
-			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, map[string]string{"error": "Failed to create organization"})
-			return
+			// If slug exists, try with UUID
+			slug = fmt.Sprintf("%s-%s", slug, uuid.New().String()[:8])
+			org, err = h.db.CreateOrganization(req.OrgName, slug)
+			if err != nil {
+				render.Status(r, http.StatusInternalServerError)
+				render.JSON(w, r, map[string]string{"error": "Failed to create organization"})
+				return
+			}
 		}
 	}
 
