@@ -264,6 +264,14 @@ async function runReview() {
         startsWith: config.openai?.apiKey?.substring(0, 10) || 'N/A'
       });
     }
+    if (debugConfig.github) {
+      const keyLen = debugConfig.github.token ? debugConfig.github.token.length : 0;
+      debugConfig.github.token = keyLen > 0 ? '[REDACTED-' + keyLen + 'chars]' : '[MISSING]';
+    }
+    if (debugConfig.gitlab) {
+      const keyLen = debugConfig.gitlab.token ? debugConfig.gitlab.token.length : 0;
+      debugConfig.gitlab.token = keyLen > 0 ? '[REDACTED-' + keyLen + 'chars]' : '[MISSING]';
+    }
     console.error('Review config:', JSON.stringify(debugConfig, null, 2));
 
     // Load code-sherlock (CommonJS package)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -163,9 +164,28 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 	// Initialize GitHub token service (if GitHub App is configured)
 	var tokenService *github.TokenService
 	if cfg.GitHubAppID > 0 && cfg.GitHubPrivateKeyPath != "" {
-		privateKeyData, err := os.ReadFile(cfg.GitHubPrivateKeyPath)
+		privateKeyPath := cfg.GitHubPrivateKeyPath
+
+		// If path is relative, try common locations
+		if !filepath.IsAbs(privateKeyPath) {
+			// Try common EC2/service locations
+			possiblePaths := []string{
+				privateKeyPath, // Original path
+				filepath.Join("/home/ubuntu/sherlock-service/backend", privateKeyPath), // EC2 location
+				filepath.Join("backend", privateKeyPath), // If running from project root
+			}
+
+			for _, path := range possiblePaths {
+				if _, err := os.Stat(path); err == nil {
+					privateKeyPath = path
+					break
+				}
+			}
+		}
+
+		privateKeyData, err := os.ReadFile(privateKeyPath)
 		if err != nil {
-			log.Warn().Err(err).Str("path", cfg.GitHubPrivateKeyPath).Msg("Failed to read GitHub private key, token refresh will not work")
+			log.Warn().Err(err).Str("path", privateKeyPath).Msg("Failed to read GitHub private key, token refresh will not work")
 		} else {
 			tokenService, err = github.NewTokenService(cfg.GitHubAppID, privateKeyData)
 			if err != nil {
@@ -418,6 +438,16 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 	// Step 5: Build review config
 	reviewConfig := wp.buildReviewConfig(*job, repo, repoConfig)
 
+	// Validate that GitHub/GitLab token is present (code-sherlock requires it)
+	if job.Platform == types.PlatformGitHub && reviewConfig.GitHub == nil {
+		logger.Error().Str("org_id", job.OrgID).Msg("GitHub token is required but not available")
+		return fmt.Errorf("GitHub token is required but not available for org %s - ensure GitHub App is properly installed and configured", job.OrgID)
+	}
+	if job.Platform == types.PlatformGitLab && reviewConfig.GitLab == nil {
+		logger.Error().Msg("GitLab token is required but not configured")
+		return fmt.Errorf("GitLab token is required but not configured")
+	}
+
 	// Step 6: Run code-sherlock review (use incremental if enabled)
 	var reviewResult *review.ReviewResult
 	var usedIncremental bool
@@ -591,55 +621,61 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 	if job.Platform == types.PlatformGitHub {
 		log.Debug().Str("org_id", job.OrgID).Str("platform", string(job.Platform)).Msg("Building review config for GitHub platform")
 		inst, err := wp.db.GetInstallationByOrgID(job.OrgID)
-		if err == nil {
-			token := inst.Token
-			log.Debug().
-				Int64("installation_id", inst.InstallationID).
-				Bool("has_token", token != "").
-				Bool("has_token_expires", inst.TokenExpires != nil).
-				Bool("has_token_service", wp.tokenService != nil).
-				Msg("Installation found, checking token")
+		if err != nil {
+			log.Error().Err(err).Str("org_id", job.OrgID).Msg("Failed to get GitHub installation - code-sherlock requires GitHub token")
+			// Return config without token - this will cause code-sherlock to fail with a clear error
+			return config
+		}
 
-			// Refresh token if expired or missing
-			if wp.tokenService != nil {
-				needsRefresh := token == "" || inst.TokenExpires == nil || (inst.TokenExpires != nil && time.Until(*inst.TokenExpires) < 5*time.Minute)
-				if needsRefresh {
-					log.Info().Int64("installation_id", inst.InstallationID).Msg("Refreshing GitHub installation token")
-					newToken, newExpiresAt, err := wp.tokenService.GetInstallationTokenWithRefresh(
-						inst.InstallationID,
-						token,
-						inst.TokenExpires,
-					)
-					if err != nil {
-						log.Warn().Err(err).Int64("installation_id", inst.InstallationID).Msg("Failed to refresh GitHub token")
-					} else {
-						token = newToken
-						log.Info().Int64("installation_id", inst.InstallationID).Bool("has_new_token", token != "").Msg("Token refreshed successfully")
-						// Update token in database
-						if updateErr := wp.db.UpdateInstallationToken(inst.InstallationID, newToken, newExpiresAt); updateErr != nil {
-							log.Warn().Err(updateErr).Int64("installation_id", inst.InstallationID).Msg("Failed to update token in database")
-						}
-					}
+		token := inst.Token
+		log.Debug().
+			Int64("installation_id", inst.InstallationID).
+			Bool("has_token", token != "").
+			Bool("has_token_expires", inst.TokenExpires != nil).
+			Bool("has_token_service", wp.tokenService != nil).
+			Msg("Installation found, checking token")
+
+		// Refresh token if expired or missing
+		if wp.tokenService != nil {
+			needsRefresh := token == "" || inst.TokenExpires == nil || (inst.TokenExpires != nil && time.Until(*inst.TokenExpires) < 5*time.Minute)
+			if needsRefresh {
+				log.Info().Int64("installation_id", inst.InstallationID).Msg("Refreshing GitHub installation token")
+				newToken, newExpiresAt, err := wp.tokenService.GetInstallationTokenWithRefresh(
+					inst.InstallationID,
+					token,
+					inst.TokenExpires,
+				)
+				if err != nil {
+					log.Warn().Err(err).Int64("installation_id", inst.InstallationID).Msg("Failed to refresh GitHub token")
 				} else {
-					log.Debug().Int64("installation_id", inst.InstallationID).Msg("Token is still valid, no refresh needed")
+					token = newToken
+					log.Info().Int64("installation_id", inst.InstallationID).Msg("Token refreshed successfully")
+					// Update token in database
+					if updateErr := wp.db.UpdateInstallationToken(inst.InstallationID, newToken, newExpiresAt); updateErr != nil {
+						log.Warn().Err(updateErr).Int64("installation_id", inst.InstallationID).Msg("Failed to update token in database")
+					}
 				}
-			} else {
-				log.Warn().Msg("TokenService is nil, cannot refresh token")
 			}
+		}
 
-			if token != "" {
-				config.GitHub = &review.GitHubConfig{
-					Token: token,
-				}
-				log.Debug().Int64("installation_id", inst.InstallationID).Bool("token_added", true).Msg("GitHub token added to review config")
-			} else {
-				log.Warn().Int64("installation_id", inst.InstallationID).Msg("GitHub token is empty, review may fail to post comments")
+		if token != "" {
+			config.GitHub = &review.GitHubConfig{
+				Token: token,
 			}
+		}
+	} else if job.Platform == types.PlatformGitLab {
+		// For GitLab, check if token is available
+		if wp.config.GitLabToken != "" {
+			config.GitLab = &review.GitLabConfig{
+				Token:     wp.config.GitLabToken,
+				ProjectID: "", // Project ID should be set from repo config if needed
+			}
+			log.Debug().Msg("GitLab token added to review config")
 		} else {
-			log.Warn().Err(err).Str("org_id", job.OrgID).Msg("Failed to get GitHub installation")
+			log.Error().Msg("GitLab token is not configured - code-sherlock requires GitHub or GitLab token to function")
 		}
 	} else {
-		log.Debug().Str("platform", string(job.Platform)).Msg("Not a GitHub platform, skipping GitHub token")
+		log.Debug().Str("platform", string(job.Platform)).Msg("Unknown platform, code-sherlock requires GitHub or GitLab token")
 	}
 
 	return config
