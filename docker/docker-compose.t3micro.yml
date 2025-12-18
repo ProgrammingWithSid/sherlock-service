@@ -70,6 +70,9 @@ services:
       - REDIS_URL=redis://redis:6379
     env_file:
       - ../backend/.env
+    volumes:
+      # Mount backend directory to access private key file
+      - ../backend:/home/ubuntu/sherlock-service/backend:ro
     mem_limit: 256m
     mem_reservation: 128m
     depends_on:
