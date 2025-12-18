@@ -96,3 +96,4 @@ docs/
 # Scripts and documentation
 *.sh
 *.md
+backend/server
