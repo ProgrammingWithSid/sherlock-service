@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/types"
 )

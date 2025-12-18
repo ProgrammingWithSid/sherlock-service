@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -275,30 +274,6 @@ func (h *WebhookHandler) handleInstallation(payload map[string]interface{}) erro
 	}
 
 	return nil
-}
-
-// sanitizeSlug converts a string to a URL-friendly slug
-func sanitizeSlug(input string) string {
-	// Convert to lowercase
-	slug := strings.ToLower(input)
-
-	// Remove special characters, keep only alphanumeric and hyphens
-	reg := regexp.MustCompile("[^a-z0-9-]")
-	slug = reg.ReplaceAllString(slug, "-")
-
-	// Remove multiple consecutive hyphens
-	reg = regexp.MustCompile("-+")
-	slug = reg.ReplaceAllString(slug, "-")
-
-	// Remove leading/trailing hyphens
-	slug = strings.Trim(slug, "-")
-
-	// Limit length
-	if len(slug) > 50 {
-		slug = slug[:50]
-	}
-
-	return slug
 }
 
 func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}) error {
