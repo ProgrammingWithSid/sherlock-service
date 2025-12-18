@@ -121,8 +121,14 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		slug = fmt.Sprintf("%s-%s", slug, uuid.New().String()[:8])
 		org, err = h.db.CreateOrganization(req.OrgName, slug)
 		if err != nil {
+			log.Error().Err(err).Str("org_name", req.OrgName).Str("slug", slug).Msg("Failed to create organization")
 			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, map[string]string{"error": "Failed to create organization"})
+			// Return error details in development, generic message in production
+			errorMsg := "Failed to create organization"
+			if strings.Contains(err.Error(), "does not exist") {
+				errorMsg = "Database tables not initialized. Please restart the server."
+			}
+			render.JSON(w, r, map[string]string{"error": errorMsg})
 			return
 		}
 	}
