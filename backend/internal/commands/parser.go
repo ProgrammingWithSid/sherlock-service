@@ -67,12 +67,13 @@ func (p *Parser) IsCommandComment(commentBody string) bool {
 // ValidateCommand validates a command
 func (p *Parser) ValidateCommand(cmd Command) error {
 	validCommands := map[string]bool{
-		"review":    true,
-		"explain":   true,
-		"fix":       true,
-		"security":  true,
+		"review":      true,
+		"explain":     true,
+		"fix":         true,
+		"test":        true,
+		"security":    true,
 		"performance": true,
-		"help":      true,
+		"help":        true,
 	}
 
 	if !validCommands[cmd.Name] {
@@ -89,12 +90,14 @@ func (p *Parser) GetHelpMessage() string {
 		"- **@%s review** - Re-run the code review for this PR\n"+
 		"- **@%s explain** - Explain the code changes in detail\n"+
 		"- **@%s fix** - Generate suggested fixes for issues\n"+
+		"- **@%s test** - Generate unit tests for a file\n"+
 		"- **@%s security** - Run a security-focused scan\n"+
 		"- **@%s performance** - Analyze performance implications\n"+
 		"- **@%s help** - Show this help message\n\n"+
 		"Examples:\n"+
 		"- `@%s review`\n"+
 		"- `@%s explain src/utils.ts:45`\n"+
-		"- `@%s fix`\n",
-		p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName)
+		"- `@%s fix` or `@%s fix src/file.ts`\n"+
+		"- `@%s test src/utils.ts` or `@%s test src/utils.ts jest`\n",
+		p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName, p.botName)
 }

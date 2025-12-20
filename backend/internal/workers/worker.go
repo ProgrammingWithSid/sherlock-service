@@ -13,10 +13,10 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/sherlock/service/internal/commands"
 	appconfig "github.com/sherlock/service/internal/config"
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/queue"
-	"github.com/sherlock/service/internal/commands"
 	"github.com/sherlock/service/internal/services/cache"
 	"github.com/sherlock/service/internal/services/comment"
 	repoconfig "github.com/sherlock/service/internal/services/config"
@@ -29,21 +29,21 @@ import (
 )
 
 type WorkerPool struct {
-	server           *asynq.Server
-	db               *database.DB
-	config           *appconfig.Config
-	gitService       *git.CloneService
-	reviewService    *review.SherlockService
-	commandService   *review.CommandService
-	githubCommentSvc *comment.GitHubCommentService
-	gitlabCommentSvc *comment.GitLabCommentService
-	commandRouter         *commands.CommandRouter
-	reviewCache           *cache.ReviewCache
-	redisClient           *redis.Client
-	incrementalReviewSvc  *review.IncrementalReviewService
-	codebaseIndexer       *indexer.CodebaseIndexer
-	metricsService        *metrics.MetricsService
-	tokenService          *github.TokenService
+	server               *asynq.Server
+	db                   *database.DB
+	config               *appconfig.Config
+	gitService           *git.CloneService
+	reviewService        *review.SherlockService
+	commandService       *review.CommandService
+	githubCommentSvc     *comment.GitHubCommentService
+	gitlabCommentSvc     *comment.GitLabCommentService
+	commandRouter        *commands.CommandRouter
+	reviewCache          *cache.ReviewCache
+	redisClient          *redis.Client
+	incrementalReviewSvc *review.IncrementalReviewService
+	codebaseIndexer      *indexer.CodebaseIndexer
+	metricsService       *metrics.MetricsService
+	tokenService         *github.TokenService
 }
 
 func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconfig.Config, redisClient *redis.Client) *WorkerPool {
@@ -132,13 +132,61 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 		},
 	)
 
-	fixHandler := commands.NewFixHandler()
+	fixHandler := commands.NewFixHandler(
+		commandService,
+		func(repoPath string, branch string) (string, error) {
+			repoPath, err := gitService.CloneRepository(repoPath, false)
+			if err != nil {
+				return "", err
+			}
+			return gitService.CreateWorktree(repoPath, branch, branch)
+		},
+		func(orgID string, repoID string) (review.ReviewConfig, error) {
+			repo, err := db.GetRepositoryByID(repoID)
+			if err != nil {
+				return review.ReviewConfig{}, err
+			}
+			org, err := db.GetOrganizationByID(orgID)
+			if err != nil {
+				return review.ReviewConfig{}, err
+			}
+			configLoader := repoconfig.NewLoader()
+			repoConfig, _ := configLoader.LoadFromJSON(repo.Config)
+			return buildReviewConfigFromRepo(org, repo, repoConfig, cfg), nil
+		},
+	)
+
+	testHandler := commands.NewTestHandler(
+		commandService,
+		func(repoPath string, branch string) (string, error) {
+			repoPath, err := gitService.CloneRepository(repoPath, false)
+			if err != nil {
+				return "", err
+			}
+			return gitService.CreateWorktree(repoPath, branch, branch)
+		},
+		func(orgID string, repoID string) (review.ReviewConfig, error) {
+			repo, err := db.GetRepositoryByID(repoID)
+			if err != nil {
+				return review.ReviewConfig{}, err
+			}
+			org, err := db.GetOrganizationByID(orgID)
+			if err != nil {
+				return review.ReviewConfig{}, err
+			}
+			configLoader := repoconfig.NewLoader()
+			repoConfig, _ := configLoader.LoadFromJSON(repo.Config)
+			return buildReviewConfigFromRepo(org, repo, repoConfig, cfg), nil
+		},
+	)
+
 	helpHandler := commands.NewHelpHandler(parser)
 
 	commandRouter := commands.NewCommandRouter(
 		reviewHandler,
 		explainHandler,
 		fixHandler,
+		testHandler,
 		securityHandler,
 		performanceHandler,
 		helpHandler,
@@ -172,7 +220,7 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 			possiblePaths := []string{
 				privateKeyPath, // Original path
 				filepath.Join("/home/ubuntu/sherlock-service/backend", privateKeyPath), // EC2 location
-				filepath.Join("backend", privateKeyPath), // If running from project root
+				filepath.Join("backend", privateKeyPath),                               // If running from project root
 			}
 
 			for _, path := range possiblePaths {
@@ -195,18 +243,18 @@ func NewWorkerPool(reviewQueue *queue.ReviewQueue, db *database.DB, cfg *appconf
 	}
 
 	return &WorkerPool{
-		server:              reviewQueue.GetServer(),
-		db:                  db,
-		config:              cfg,
-		gitService:          gitService,
-		reviewService:       reviewService,
-		commandService:      commandService,
-		commandRouter:       commandRouter,
-		reviewCache:         reviewCache,
-		redisClient:         redisClient,
+		server:               reviewQueue.GetServer(),
+		db:                   db,
+		config:               cfg,
+		gitService:           gitService,
+		reviewService:        reviewService,
+		commandService:       commandService,
+		commandRouter:        commandRouter,
+		reviewCache:          reviewCache,
+		redisClient:          redisClient,
 		incrementalReviewSvc: incrementalReviewSvc,
-		codebaseIndexer:     codebaseIndexer,
-		metricsService:      metricsService,
+		codebaseIndexer:      codebaseIndexer,
+		metricsService:       metricsService,
 		tokenService:         tokenService,
 	}
 }
@@ -234,7 +282,7 @@ func buildReviewConfigFromRepo(org *types.Organization, repo *types.Repository, 
 		}
 		config.OpenAI = &review.OpenAIConfig{
 			APIKey: cfg.OpenAIAPIKey,
-			Model:   model,
+			Model:  model,
 		}
 	} else if aiProvider == "claude" && cfg.ClaudeAPIKey != "" {
 		model := "claude-3-5-sonnet-20241022"
@@ -243,7 +291,7 @@ func buildReviewConfigFromRepo(org *types.Organization, repo *types.Repository, 
 		}
 		config.Claude = &review.ClaudeConfig{
 			APIKey: cfg.ClaudeAPIKey,
-			Model:   model,
+			Model:  model,
 		}
 	}
 
@@ -599,7 +647,7 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 		}
 		config.OpenAI = &review.OpenAIConfig{
 			APIKey: wp.config.OpenAIAPIKey,
-			Model:   model,
+			Model:  model,
 		}
 	} else if aiProvider == "claude" && wp.config.ClaudeAPIKey != "" {
 		model := "claude-3-5-sonnet-20241022"
@@ -608,7 +656,7 @@ func (wp *WorkerPool) buildReviewConfig(job types.ReviewJob, repo *types.Reposit
 		}
 		config.Claude = &review.ClaudeConfig{
 			APIKey: wp.config.ClaudeAPIKey,
-			Model:   model,
+			Model:  model,
 		}
 	}
 
@@ -703,13 +751,13 @@ func (wp *WorkerPool) convertReviewResult(reviewResult *review.ReviewResult) typ
 	var qualityMetrics *types.ReviewQualityMetrics
 	if reviewResult.QualityMetrics != nil {
 		qualityMetrics = &types.ReviewQualityMetrics{
-			Accuracy:     reviewResult.QualityMetrics.Accuracy,
+			Accuracy:      reviewResult.QualityMetrics.Accuracy,
 			Actionability: reviewResult.QualityMetrics.Actionability,
-			Coverage:     reviewResult.QualityMetrics.Coverage,
-			Precision:    reviewResult.QualityMetrics.Precision,
-			Recall:       reviewResult.QualityMetrics.Recall,
-			OverallScore: reviewResult.QualityMetrics.OverallScore,
-			Confidence:   reviewResult.QualityMetrics.Confidence,
+			Coverage:      reviewResult.QualityMetrics.Coverage,
+			Precision:     reviewResult.QualityMetrics.Precision,
+			Recall:        reviewResult.QualityMetrics.Recall,
+			OverallScore:  reviewResult.QualityMetrics.OverallScore,
+			Confidence:    reviewResult.QualityMetrics.Confidence,
 		}
 	}
 
@@ -760,8 +808,8 @@ func (wp *WorkerPool) convertReviewResult(reviewResult *review.ReviewResult) typ
 			Warnings:    reviewResult.Stats.Warnings,
 			Suggestions: reviewResult.Stats.Suggestions,
 		},
-		Comments:        comments,
-		QualityMetrics:  qualityMetrics,
+		Comments:       comments,
+		QualityMetrics: qualityMetrics,
 	}
 	return result
 }

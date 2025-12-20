@@ -125,15 +125,84 @@ func (h *ExplainHandler) Handle(cmd Command, ctx CommandContext) (string, error)
 }
 
 // FixHandler handles @sherlock fix command
-type FixHandler struct{}
+type FixHandler struct {
+	commandService *review.CommandService
+	getWorktree    func(repoPath string, branch string) (string, error)
+	getConfig      func(orgID string, repoID string) (review.ReviewConfig, error)
+}
 
-func NewFixHandler() *FixHandler {
-	return &FixHandler{}
+func NewFixHandler(
+	commandService *review.CommandService,
+	getWorktree func(repoPath string, branch string) (string, error),
+	getConfig func(orgID string, repoID string) (review.ReviewConfig, error),
+) *FixHandler {
+	return &FixHandler{
+		commandService: commandService,
+		getWorktree:    getWorktree,
+		getConfig:      getConfig,
+	}
 }
 
 func (h *FixHandler) Handle(cmd Command, ctx CommandContext) (string, error) {
-	// TODO: Implement fix generation logic
-	return "🔧 Generating fixes...\n\nThis feature is coming soon!", nil
+	worktreePath, err := h.getWorktree(ctx.Repo.FullName, ctx.PR.HeadSHA)
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	config, err := h.getConfig(ctx.OrgID, ctx.RepoID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	// Parse optional file filter from args
+	var fileFilter []string
+	if len(cmd.Args) > 0 {
+		fileFilter = cmd.Args
+	}
+
+	req := review.FixRequest{
+		WorktreePath: worktreePath,
+		TargetBranch: ctx.PR.HeadSHA,
+		BaseBranch:   ctx.PR.BaseBranch,
+		Config:       config,
+		FileFilter:   fileFilter,
+	}
+
+	result, err := h.commandService.RunFixGeneration(req)
+	if err != nil {
+		return "", fmt.Errorf("fix generation failed: %w", err)
+	}
+
+	response := "## 🔧 Fix Suggestions\n\n"
+	response += fmt.Sprintf("**Total Fixes:** %d\n\n", result.Summary.Total)
+	response += fmt.Sprintf("| Confidence | Count |\n")
+	response += fmt.Sprintf("|------------|-------|\n")
+	response += fmt.Sprintf("| 🟢 High | %d |\n", result.Summary.HighConfidence)
+	response += fmt.Sprintf("| 🟡 Medium | %d |\n", result.Summary.MediumConfidence)
+	response += fmt.Sprintf("| 🔴 Low | %d |\n\n", result.Summary.LowConfidence)
+	response += fmt.Sprintf("**Auto-Applicable:** %d\n\n", result.Summary.AutoApplicable)
+
+	if len(result.Suggestions) > 0 {
+		response += "### Top Fix Suggestions\n\n"
+		for i, suggestion := range result.Suggestions {
+			if i >= 10 {
+				break
+			}
+			confidenceEmoji := "🟢"
+			if suggestion.Confidence == "medium" {
+				confidenceEmoji = "🟡"
+			} else if suggestion.Confidence == "low" {
+				confidenceEmoji = "🔴"
+			}
+			response += fmt.Sprintf("#### %s %s - `%s:%d`\n\n", confidenceEmoji, suggestion.Description, suggestion.File, suggestion.Line)
+			response += fmt.Sprintf("**Fix:**\n```\n%s\n```\n\n", suggestion.Fix)
+			if suggestion.Explanation != "" {
+				response += fmt.Sprintf("**Explanation:** %s\n\n", suggestion.Explanation)
+			}
+		}
+	}
+
+	return response, nil
 }
 
 // SecurityHandler handles @sherlock security command
@@ -279,6 +348,84 @@ func (h *HelpHandler) Handle(cmd Command, ctx CommandContext) (string, error) {
 	return h.parser.GetHelpMessage(), nil
 }
 
+// TestHandler handles @sherlock test command
+type TestHandler struct {
+	commandService *review.CommandService
+	getWorktree    func(repoPath string, branch string) (string, error)
+	getConfig      func(orgID string, repoID string) (review.ReviewConfig, error)
+}
+
+func NewTestHandler(
+	commandService *review.CommandService,
+	getWorktree func(repoPath string, branch string) (string, error),
+	getConfig func(orgID string, repoID string) (review.ReviewConfig, error),
+) *TestHandler {
+	return &TestHandler{
+		commandService: commandService,
+		getWorktree:    getWorktree,
+		getConfig:      getConfig,
+	}
+}
+
+func (h *TestHandler) Handle(cmd Command, ctx CommandContext) (string, error) {
+	if len(cmd.Args) == 0 {
+		return "Please specify a file to generate tests for. Example: `@sherlock test src/utils.ts`", nil
+	}
+
+	filePath := cmd.Args[0]
+	framework := ""
+	if len(cmd.Args) > 1 {
+		framework = cmd.Args[1]
+	}
+
+	worktreePath, err := h.getWorktree(ctx.Repo.FullName, ctx.PR.HeadSHA)
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	config, err := h.getConfig(ctx.OrgID, ctx.RepoID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	req := review.TestRequest{
+		WorktreePath: worktreePath,
+		FilePath:     filePath,
+		Config:       config,
+		Framework:    framework,
+	}
+
+	result, err := h.commandService.GenerateTests(req)
+	if err != nil {
+		return "", fmt.Errorf("test generation failed: %w", err)
+	}
+
+	response := fmt.Sprintf("## 🧪 Generated Tests for `%s`\n\n", filePath)
+	response += fmt.Sprintf("**Framework:** %s\n\n", result.Framework)
+	response += fmt.Sprintf("**Summary:** %s\n\n", result.Summary)
+	response += fmt.Sprintf("**Coverage:**\n")
+	response += fmt.Sprintf("- Functions: %d\n", result.Coverage.Functions)
+	response += fmt.Sprintf("- Branches: %d\n", result.Coverage.Branches)
+	response += fmt.Sprintf("- Lines: %d\n\n", result.Coverage.Lines)
+
+	if len(result.Tests) > 0 {
+		response += "### Generated Tests\n\n"
+		for i, test := range result.Tests {
+			if i >= 5 {
+				response += fmt.Sprintf("\n... and %d more test(s)\n", len(result.Tests)-5)
+				break
+			}
+			response += fmt.Sprintf("#### %s\n\n", test.Name)
+			if test.Description != "" {
+				response += fmt.Sprintf("**Description:** %s\n\n", test.Description)
+			}
+			response += fmt.Sprintf("```%s\n%s\n```\n\n", result.Framework, test.Code)
+		}
+	}
+
+	return response, nil
+}
+
 // CommandRouter routes commands to appropriate handlers
 type CommandRouter struct {
 	handlers map[string]Handler
@@ -288,18 +435,20 @@ func NewCommandRouter(
 	reviewHandler *ReviewHandler,
 	explainHandler *ExplainHandler,
 	fixHandler *FixHandler,
+	testHandler *TestHandler,
 	securityHandler *SecurityHandler,
 	performanceHandler *PerformanceHandler,
 	helpHandler *HelpHandler,
 ) *CommandRouter {
 	return &CommandRouter{
 		handlers: map[string]Handler{
-			"review":     reviewHandler,
-			"explain":    explainHandler,
-			"fix":        fixHandler,
-			"security":   securityHandler,
+			"review":      reviewHandler,
+			"explain":     explainHandler,
+			"fix":         fixHandler,
+			"test":        testHandler,
+			"security":    securityHandler,
 			"performance": performanceHandler,
-			"help":       helpHandler,
+			"help":        helpHandler,
 		},
 	}
 }

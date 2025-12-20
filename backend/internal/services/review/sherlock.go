@@ -27,14 +27,14 @@ func NewSherlockService(nodePath string) *SherlockService {
 
 // ReviewConfig represents the configuration for code-sherlock
 type ReviewConfig struct {
-	AIProvider  string                 `json:"aiProvider"`
-	OpenAI      *OpenAIConfig          `json:"openai,omitempty"`
-	Claude      *ClaudeConfig          `json:"claude,omitempty"`
-	GlobalRules []string               `json:"globalRules"`
-	Repository  RepositoryConfig       `json:"repository"`
-	PR          PRConfig               `json:"pr"`
-	GitHub      *GitHubConfig          `json:"github,omitempty"`
-	GitLab      *GitLabConfig          `json:"gitlab,omitempty"`
+	AIProvider  string           `json:"aiProvider"`
+	OpenAI      *OpenAIConfig    `json:"openai,omitempty"`
+	Claude      *ClaudeConfig    `json:"claude,omitempty"`
+	GlobalRules []string         `json:"globalRules"`
+	Repository  RepositoryConfig `json:"repository"`
+	PR          PRConfig         `json:"pr"`
+	GitHub      *GitHubConfig    `json:"github,omitempty"`
+	GitLab      *GitLabConfig    `json:"gitlab,omitempty"`
 }
 
 type OpenAIConfig struct {
@@ -78,12 +78,24 @@ type ReviewRequest struct {
 // ReviewResult represents the result from code-sherlock
 type ReviewResult struct {
 	Summary           string                `json:"summary"`
-	Stats             ReviewStats            `json:"stats"`
-	Comments          []ReviewComment        `json:"comments"`
-	Recommendation    string                 `json:"recommendation"`
-	QualityMetrics    *ReviewQualityMetrics  `json:"qualityMetrics,omitempty"`
-	NamingSuggestions []NamingSuggestion     `json:"namingSuggestions,omitempty"`
+	Stats             ReviewStats           `json:"stats"`
+	Comments          []ReviewComment       `json:"comments"`
+	Recommendation    string                `json:"recommendation"`
+	QualityMetrics    *ReviewQualityMetrics `json:"qualityMetrics,omitempty"`
+	NamingSuggestions []NamingSuggestion    `json:"namingSuggestions,omitempty"`
 	PRTitleSuggestion *PRTitleSuggestion    `json:"prTitleSuggestion,omitempty"`
+	ImpactAnalysis    *ImpactAnalysis       `json:"impactAnalysis,omitempty"`
+}
+
+// ImpactAnalysis represents codegraph impact analysis results
+type ImpactAnalysis struct {
+	ChangedFiles    []string `json:"changedFiles"`
+	AffectedFiles   []string `json:"affectedFiles"`
+	DependencyFiles []string `json:"dependencyFiles"`
+	ImpactChain     []string `json:"impactChain"`
+	Severity        string   `json:"severity"` // "high", "medium", "low"
+	ReviewScope     int      `json:"reviewScope"`
+	Diagram         string   `json:"diagram,omitempty"` // Mermaid diagram visualization
 }
 
 // NamingSuggestion represents a suggestion for renaming an identifier
@@ -108,7 +120,7 @@ type PRTitleSuggestion struct {
 // ReviewQualityMetrics represents quality metrics for a review
 type ReviewQualityMetrics struct {
 	Accuracy      float64 `json:"accuracy"`
-	Actionability  float64 `json:"actionability"`
+	Actionability float64 `json:"actionability"`
 	Coverage      float64 `json:"coverage"`
 	Precision     float64 `json:"precision"`
 	Recall        float64 `json:"recall"`
@@ -344,6 +356,79 @@ async function runReview() {
     // Run review
     const result = await reviewer.reviewPR(targetBranch, false, baseBranch || 'main');
 
+    // Extract impact analysis from codegraph analyzer if available
+    let impactAnalysis = undefined;
+    try {
+      const { createCodegraphAnalyzer } = await import('code-sherlock');
+      const codegraphAnalyzer = createCodegraphAnalyzer({
+        rootDir: worktreePath,
+        maxDepth: 5,
+        analyzeInternal: true,
+      });
+
+      // Get changed files for impact analysis
+      const { execSync } = require('child_process');
+      const changedFilesOutput = execSync(
+        'git -C ' + worktreePath + ' diff --name-only ' + (baseBranch || 'main') + '...' + targetBranch,
+        { encoding: 'utf-8' }
+      ).trim();
+
+      if (changedFilesOutput) {
+        const changedFilePaths = changedFilesOutput.split('\n').filter(f => f);
+        if (changedFilePaths.length > 0) {
+          // Build graph with all files in the repo (for better dependency tracking)
+          const allFilesOutput = execSync(
+            'git -C ' + worktreePath + ' ls-files',
+            { encoding: 'utf-8' }
+          ).trim();
+          const allFiles = allFilesOutput ? allFilesOutput.split('\n').filter(f => f) : changedFilePaths;
+
+          codegraphAnalyzer.buildGraph(allFiles.map(f => path.join(worktreePath, f)));
+
+          // Create ChangedFile objects for impact analysis
+          const changedFiles = changedFilePaths.map(filePath => {
+            const fullPath = path.join(worktreePath, filePath);
+            const stats = execSync(
+              'git -C ' + worktreePath + ' diff --numstat ' + (baseBranch || 'main') + '...' + targetBranch + ' -- ' + filePath,
+              { encoding: 'utf-8' }
+            ).trim();
+            const parts = stats.split('\t');
+            const additions = parts[0] ? parseInt(parts[0]) || 0 : 0;
+            const deletions = parts[1] ? parseInt(parts[1]) || 0 : 0;
+
+            return {
+              path: fullPath,
+              additions: additions,
+              deletions: deletions,
+              status: 'modified',
+            };
+          });
+
+          const impact = codegraphAnalyzer.analyzeImpact(changedFiles);
+
+          // Generate visualization diagram
+          const visualizationFiles = [
+            ...impact.changedFiles.slice(0, 10),
+            ...impact.affectedFiles.slice(0, 10),
+          ];
+          const diagram = codegraphAnalyzer.generateVisualization(visualizationFiles);
+
+          impactAnalysis = {
+            changedFiles: impact.changedFiles,
+            affectedFiles: impact.affectedFiles,
+            dependencyFiles: impact.dependencyFiles,
+            impactChain: impact.impactChain,
+            severity: impact.severity,
+            reviewScope: impact.reviewScope,
+            diagram: diagram, // Add visualization diagram
+          };
+        }
+      }
+    } catch (error) {
+      // Impact analysis is optional, continue without it
+      console.error('Impact analysis failed (non-critical):', error.message);
+    }
+
     // Convert to JSON format
     const output = {
       summary: result.summary || '',
@@ -377,6 +462,7 @@ async function runReview() {
         reason: result.prTitleSuggestion.reason || '',
         alternatives: result.prTitleSuggestion.alternatives || undefined,
       } : undefined,
+      impactAnalysis: impactAnalysis || undefined,
     };
 
     console.log(JSON.stringify(output));

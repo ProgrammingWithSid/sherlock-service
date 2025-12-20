@@ -13,12 +13,12 @@ import (
 
 // IncrementalReviewService provides incremental review capabilities
 type IncrementalReviewService struct {
-	gitService      *git.CloneService
-	reviewCache     *cache.ReviewCache
-	reviewService   *SherlockService
-	rustIndexer     *indexer.RustIndexerService // Optional rust indexer for chunk hashing
-	useRustIndexer  bool
-	repoPath        string // Current repo path for rust indexer
+	gitService     *git.CloneService
+	reviewCache    *cache.ReviewCache
+	reviewService  *SherlockService
+	rustIndexer    *indexer.RustIndexerService // Optional rust indexer for chunk hashing
+	useRustIndexer bool
+	repoPath       string // Current repo path for rust indexer
 }
 
 // NewIncrementalReviewService creates a new incremental review service
@@ -46,10 +46,10 @@ func NewIncrementalReviewService(
 
 // ChangedFileInfo contains information about a changed file
 type ChangedFileInfo struct {
-	Path        string
-	Status      string
+	Path         string
+	Status       string
 	ChangedLines []int
-	ChunkHashes []string
+	ChunkHashes  []string
 }
 
 // ReviewDiff reviews only the changed portions of code
@@ -77,9 +77,9 @@ func (irs *IncrementalReviewService) ReviewDiff(
 
 	if len(changedFiles) == 0 {
 		return &ReviewResult{
-			Summary: "No files changed",
-			Stats: ReviewStats{},
-			Comments: []ReviewComment{},
+			Summary:        "No files changed",
+			Stats:          ReviewStats{},
+			Comments:       []ReviewComment{},
 			Recommendation: "APPROVE",
 		}, nil
 	}
@@ -136,10 +136,10 @@ func (irs *IncrementalReviewService) ReviewDiff(
 		}
 
 		changedFileInfos = append(changedFileInfos, ChangedFileInfo{
-			Path:        filePath,
-			Status:      diff.Status,
+			Path:         filePath,
+			Status:       diff.Status,
 			ChangedLines: changedLines,
-			ChunkHashes: chunkHashes,
+			ChunkHashes:  chunkHashes,
 		})
 	}
 
@@ -199,9 +199,9 @@ func (irs *IncrementalReviewService) ReviewDiff(
 	} else {
 		// All chunks were cached
 		newResults = &ReviewResult{
-			Summary: "All changes were previously reviewed (cached)",
-			Stats: ReviewStats{},
-			Comments: []ReviewComment{},
+			Summary:        "All changes were previously reviewed (cached)",
+			Stats:          ReviewStats{},
+			Comments:       []ReviewComment{},
 			Recommendation: "APPROVE",
 		}
 	}
@@ -257,13 +257,12 @@ func convertTypesReviewResultToReviewResult(tr *types.ReviewResult) *ReviewResul
 	}
 }
 
-
 // mergeReviewResults merges multiple review results into one
 func mergeReviewResults(cached []*ReviewResult, new *ReviewResult) *ReviewResult {
 	merged := &ReviewResult{
-		Summary:     new.Summary,
-		Stats:       new.Stats,
-		Comments:    make([]ReviewComment, 0),
+		Summary:        new.Summary,
+		Stats:          new.Stats,
+		Comments:       make([]ReviewComment, 0),
 		Recommendation: new.Recommendation,
 	}
 
