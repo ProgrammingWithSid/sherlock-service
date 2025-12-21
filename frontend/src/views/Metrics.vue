@@ -354,10 +354,11 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (refreshInterval) {
+  if (refreshInterval !== null) {
     clearInterval(refreshInterval)
   }
 })
+
 
 </script>
 

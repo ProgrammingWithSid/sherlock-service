@@ -618,11 +618,32 @@ func (h *Handler) SetRepositoryActive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgID := r.Header.Get("X-Org-ID")
+	if orgID == "" {
+		render.Status(r, http.StatusUnauthorized)
+		render.JSON(w, r, map[string]string{"error": "Organization ID required"})
+		return
+	}
+
+	// Verify ownership/existence within org
+	repo, err := h.db.GetRepository(id) // Assuming this exists or using GetRepositoriesByOrgID
+	if err != nil {
+		render.Status(r, http.StatusNotFound)
+		render.JSON(w, r, map[string]string{"error": "Repository not found"})
+		return
+	}
+	if repo.OrgID != orgID {
+		render.Status(r, http.StatusForbidden)
+		render.JSON(w, r, map[string]string{"error": "Access denied"})
+		return
+	}
+
 	if err := h.db.SetRepositoryActive(id, body.IsActive); err != nil {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": err.Error()})
 		return
 	}
+
 
 	render.JSON(w, r, map[string]string{"status": "updated"})
 }
