@@ -44,5 +44,8 @@
     "vue"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "code-sherlock": "^3.2.0"
+  }
 }
