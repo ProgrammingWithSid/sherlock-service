@@ -110,9 +110,10 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="text-center">
             <div class="text-sm text-gray-600 mb-2">Average Quality Score</div>
-            <div class="text-4xl font-bold" :class="getQualityColorClass(metrics.quality.average_score)">
-              {{ metrics.quality.average_score.toFixed(1) }}
+            <div class="text-4xl font-bold" :class="getQualityColorClass(metrics?.quality?.average_score || 0)">
+              {{ (metrics?.quality?.average_score || 0).toFixed(1) }}
             </div>
+
             <div class="text-xs text-gray-500 mt-1">out of 100</div>
           </div>
           <div class="text-center">
@@ -180,15 +181,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+
+import { analyticsAPI, type IssueCategoryBreakdown, type QualityTrend, type RepositoryMetrics, type SeverityTrends, type TimeSeriesPoint } from '../api/analytics'
 import { getMetrics, type MetricsResponse } from '../api/metrics'
-import { analyticsAPI, type QualityTrend, type TimeSeriesPoint, type IssueCategoryBreakdown, type RepositoryMetrics, type SeverityTrends } from '../api/analytics'
-import StatCard from '../components/StatCard.vue'
+import BarChart from '../components/BarChart.vue'
 import LineChart from '../components/LineChart.vue'
 import MultiLineChart from '../components/MultiLineChart.vue'
-import BarChart from '../components/BarChart.vue'
-import PieChart from '../components/PieChart.vue'
 import NavBar from '../components/NavBar.vue'
+import PieChart from '../components/PieChart.vue'
+import StatCard from '../components/StatCard.vue'
 
 const metrics = ref<MetricsResponse | null>(null)
 const qualityTrends = ref<QualityTrend[]>([])
@@ -302,14 +304,18 @@ const loadAnalytics = async () => {
   }
 }
 
-const formatPercentage = (value: number): string => {
+const formatPercentage = (value: number | undefined | null): string => {
+  if (value === undefined || value === null) return '0.0%'
   return `${value.toFixed(1)}%`
 }
 
-const formatDuration = (ms: number): string => {
+
+const formatDuration = (ms: number | undefined | null): string => {
+  if (ms === undefined || ms === null) return '0ms'
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
 }
+
 
 const getCacheHitColor = (rate: number): string => {
   if (rate >= 70) return 'text-green-600'
@@ -335,15 +341,24 @@ const getQualityColorClass = (score: number): string => {
   return 'text-red-600'
 }
 
+let refreshInterval: number | null = null
+
 onMounted(() => {
   loadMetrics()
   loadAnalytics()
   // Auto-refresh every 60 seconds
-  setInterval(() => {
+  refreshInterval = window.setInterval(() => {
     loadMetrics()
     loadAnalytics()
   }, 60000)
 })
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
+})
+
 </script>
 
 <style scoped>

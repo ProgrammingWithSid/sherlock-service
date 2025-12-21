@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"net/url"
 	"strings"
 	"time"
+
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -520,23 +522,35 @@ func (h *Handler) ConnectRepository(w http.ResponseWriter, r *http.Request) {
 
 	// Parse URL if provided
 	if body.URL != "" {
-		// Extract owner/repo from URL
-		// Format: https://github.com/owner/repo or https://gitlab.com/owner/repo
-		// This is a simplified parser - in production, use proper URL parsing
-		parts := strings.Split(strings.TrimSuffix(body.URL, ".git"), "/")
+		u, err := url.Parse(body.URL)
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, map[string]string{"error": "Invalid repository URL"})
+			return
+		}
+
+		// Normalize path
+		path := strings.TrimSuffix(strings.TrimPrefix(u.Path, "/"), ".git")
+		parts := strings.Split(path, "/")
+
 		if len(parts) >= 2 {
-			body.Owner = parts[len(parts)-2]
-			body.Repo = parts[len(parts)-1]
+			body.Owner = parts[0]
+			body.Repo = strings.Join(parts[1:], "/")
 			if body.Platform == "" {
-				if strings.Contains(body.URL, "gitlab.com") {
+				if strings.Contains(u.Host, "gitlab.com") {
 					body.Platform = "gitlab"
 				} else {
 					body.Platform = "github"
 				}
 			}
+		} else {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, map[string]string{"error": "Invalid repository URL format (expected owner/repo)"})
+			return
 		}
 	}
 
+	// Strict validation
 	if body.Owner == "" || body.Repo == "" {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, map[string]string{"error": "Owner and repo are required"})
@@ -547,24 +561,30 @@ func (h *Handler) ConnectRepository(w http.ResponseWriter, r *http.Request) {
 		body.Platform = "github"
 	}
 
+	// Validate platform
+	if body.Platform != "github" && body.Platform != "gitlab" && body.Platform != "bitbucket" {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, map[string]string{"error": "Unsupported platform"})
+		return
+	}
+
 	// Check if repository already exists
-	repos, err := h.db.GetRepositoriesByOrgID(orgID)
-	if err != nil {
+	repo, err := h.db.GetRepositoryByFullName(orgID, fmt.Sprintf("%s/%s", body.Owner, body.Repo))
+	if err != nil && err.Error() != "repository not found" {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": err.Error()})
 		return
 	}
 
-	fullName := fmt.Sprintf("%s/%s", body.Owner, body.Repo)
-	for _, repo := range repos {
-		if repo.FullName == fullName {
-			render.JSON(w, r, repo)
-			return
-		}
+	if repo != nil {
+		render.JSON(w, r, repo)
+		return
 	}
 
+	fullName := fmt.Sprintf("%s/%s", body.Owner, body.Repo)
+
 	// Create new repository
-	repo := &types.Repository{
+	repo = &types.Repository{
 		OrgID:      orgID,
 		Platform:   types.Platform(body.Platform),
 		ExternalID: fmt.Sprintf("%s/%s", body.Owner, body.Repo),
@@ -584,6 +604,7 @@ func (h *Handler) ConnectRepository(w http.ResponseWriter, r *http.Request) {
 	render.Status(r, http.StatusCreated)
 	render.JSON(w, r, repo)
 }
+
 
 func (h *Handler) SetRepositoryActive(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")

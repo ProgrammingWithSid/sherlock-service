@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/sherlock/service/internal/types"
 )
+
 
 // AnalyticsService provides analytics and reporting capabilities
 type AnalyticsService struct {
@@ -113,8 +115,10 @@ func (as *AnalyticsService) GetQualityTrends(orgID string, days int) ([]QualityT
 
 		err := rows.Scan(&date, &overallScore, &accuracy, &actionability, &coverage)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan quality trend row")
 			continue
 		}
+
 
 		trend.Date = date.Format("2006-01-02")
 		if overallScore.Valid {
@@ -173,8 +177,10 @@ func (as *AnalyticsService) GetIssueTrends(orgID string, days int) ([]TimeSeries
 
 		err := rows.Scan(&date, &value)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan issue trend row")
 			continue
 		}
+
 
 		point.Date = date.Format("2006-01-02")
 		if value.Valid {
@@ -216,13 +222,17 @@ func (as *AnalyticsService) GetIssueCategoryBreakdown(orgID string, days int) ([
 
 		err := rows.Scan(&resultJSON, &createdAt)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan review row")
 			continue
 		}
 
+
 		var result map[string]interface{}
 		if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
+			log.Warn().Err(err).Msg("Failed to unmarshal review result")
 			continue
 		}
+
 
 		comments, ok := result["comments"].([]interface{})
 		if !ok {
@@ -311,19 +321,28 @@ func (as *AnalyticsService) GetRepositoryComparison(orgID string, days int) ([]R
 	var metrics []RepositoryMetrics
 	for rows.Next() {
 		var metric RepositoryMetrics
+		var repositoryName sql.NullString
 		var avgScore sql.NullFloat64
 
 		err := rows.Scan(
 			&metric.RepositoryID,
-			&metric.RepositoryName,
+			&repositoryName,
 			&metric.TotalReviews,
 			&metric.TotalIssues,
 			&avgScore,
 			&metric.SuccessRate,
 		)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan repository comparison row")
 			continue
 		}
+
+		if repositoryName.Valid {
+			metric.RepositoryName = repositoryName.String
+		} else {
+			metric.RepositoryName = "Unknown"
+		}
+
 
 		if avgScore.Valid {
 			metric.AverageScore = avgScore.Float64
@@ -390,8 +409,10 @@ func (as *AnalyticsService) GetSeverityTrends(orgID string, days int) (map[strin
 
 		err := rows.Scan(&date, &errors, &warnings, &suggestions)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan severity trend row")
 			continue
 		}
+
 
 		dateStr := date.Format("2006-01-02")
 
