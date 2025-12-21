@@ -19,6 +19,7 @@ import (
 	"github.com/sherlock/service/internal/config"
 	"github.com/sherlock/service/internal/database"
 	"github.com/sherlock/service/internal/queue"
+	"github.com/sherlock/service/internal/services/analytics"
 	"github.com/sherlock/service/internal/services/learning"
 	"github.com/sherlock/service/internal/services/metrics"
 	"github.com/sherlock/service/internal/workers"
@@ -49,6 +50,9 @@ func main() {
 	// Initialize metrics service
 	metricsService := metrics.NewMetricsService(redisClient)
 
+	// Initialize analytics service
+	analyticsService := analytics.NewAnalyticsService(db.Conn())
+
 	// Initialize workers
 	workerPool := workers.NewWorkerPool(reviewQueue, db, cfg, redisClient)
 	go workerPool.Start(context.Background())
@@ -57,7 +61,7 @@ func main() {
 	api.InitSessionStore(db)
 
 	// Initialize API router
-	router := setupRouter(cfg, db, reviewQueue, metricsService)
+	router := setupRouter(cfg, db, reviewQueue, metricsService, analyticsService)
 
 	// Start server
 	server := &http.Server{
@@ -95,7 +99,7 @@ func main() {
 	log.Info().Msg("Server stopped")
 }
 
-func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQueue, metricsService *metrics.MetricsService) *chi.Mux {
+func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQueue, metricsService *metrics.MetricsService, analyticsService *analytics.AnalyticsService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -134,7 +138,7 @@ func setupRouter(cfg *config.Config, db *database.DB, reviewQueue *queue.ReviewQ
 
 		// Protected API routes
 		r.Route("/", func(r chi.Router) {
-			apiHandler := api.NewHandler(db, reviewQueue, cfg, metricsService)
+			apiHandler := api.NewHandler(db, reviewQueue, cfg, metricsService, analyticsService)
 			apiHandler.RegisterRoutes(r)
 
 			// Organization routes (for managing global rules)
