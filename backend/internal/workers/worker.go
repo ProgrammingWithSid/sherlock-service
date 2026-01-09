@@ -468,7 +468,7 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 	}
 
 	// Step 3: Clone repository (or use existing) - pass token for private repos
-	repoPath, err := wp.gitService.CloneRepository(job.Repo.CloneURL, isPrivate || (repo == nil && job.Platform == types.PlatformGitHub), githubToken)
+	repoPath, err = wp.gitService.CloneRepository(job.Repo.CloneURL, isPrivate || (repo == nil && job.Platform == types.PlatformGitHub), githubToken)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone repository")
 		return fmt.Errorf("failed to clone repository: %w", err)
