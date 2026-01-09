@@ -391,15 +391,22 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult, skip
 			for _, comment := range skippedFileNotFound {
 				severityEmoji := s.getSeverityEmoji(comment.Severity)
 				// Format: 🔴 ERROR | security | screens/restaurant/menu/uploadMenu/index.tsx:140
-				parts = append(parts, fmt.Sprintf("- %s **%s** | `%s` | `%s:%d`", 
-					severityEmoji, 
-					strings.ToUpper(string(comment.Severity)), 
+				parts = append(parts, fmt.Sprintf("- %s **%s** | `%s` | `%s:%d`",
+					severityEmoji,
+					strings.ToUpper(string(comment.Severity)),
 					comment.Category,
-					comment.File, 
+					comment.File,
 					comment.Line))
-				// Add the message/summary of the issue
-				if comment.Message != "" {
-					parts = append(parts, fmt.Sprintf("  - %s", comment.Message))
+				// Add the message/summary of the issue - always show something
+				message := comment.Message
+				if message == "" {
+					// Fallback: create a basic description from category and severity
+					message = fmt.Sprintf("Issue detected in %s category", comment.Category)
+				}
+				parts = append(parts, fmt.Sprintf("  - **Issue:** %s", message))
+				// Add suggested fix if available
+				if comment.Fix != "" {
+					parts = append(parts, fmt.Sprintf("  - **Suggested fix:** `%s`", strings.TrimSpace(comment.Fix)))
 				}
 				parts = append(parts, "")
 			}
@@ -417,15 +424,22 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult, skip
 			for _, comment := range skippedInvalidLine {
 				severityEmoji := s.getSeverityEmoji(comment.Severity)
 				// Format: 🔴 ERROR | security | screens/restaurant/menu/uploadMenu/index.tsx:140
-				parts = append(parts, fmt.Sprintf("- %s **%s** | `%s` | `%s:%d`", 
-					severityEmoji, 
-					strings.ToUpper(string(comment.Severity)), 
+				parts = append(parts, fmt.Sprintf("- %s **%s** | `%s` | `%s:%d`",
+					severityEmoji,
+					strings.ToUpper(string(comment.Severity)),
 					comment.Category,
-					comment.File, 
+					comment.File,
 					comment.Line))
-				// Add the message/summary of the issue
-				if comment.Message != "" {
-					parts = append(parts, fmt.Sprintf("  - %s", comment.Message))
+				// Add the message/summary of the issue - always show something
+				message := comment.Message
+				if message == "" {
+					// Fallback: create a basic description from category and severity
+					message = fmt.Sprintf("Issue detected in %s category", comment.Category)
+				}
+				parts = append(parts, fmt.Sprintf("  - **Issue:** %s", message))
+				// Add suggested fix if available
+				if comment.Fix != "" {
+					parts = append(parts, fmt.Sprintf("  - **Suggested fix:** `%s`", strings.TrimSpace(comment.Fix)))
 				}
 				parts = append(parts, "")
 			}
