@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,7 +52,8 @@ func NewCloneService(reposPath string, maxAgeHours int) *CloneService {
 }
 
 // CloneRepository clones a repository using sparse checkout for efficiency
-func (s *CloneService) CloneRepository(cloneURL string, isPrivate bool) (string, error) {
+// If token is provided and the repository is private, it will be embedded in the clone URL
+func (s *CloneService) CloneRepository(cloneURL string, isPrivate bool, token ...string) (string, error) {
 	repoID := uuid.New().String()
 	repoPath := filepath.Join(s.reposPath, repoID)
 
@@ -60,12 +62,20 @@ func (s *CloneService) CloneRepository(cloneURL string, isPrivate bool) (string,
 		return "", fmt.Errorf("failed to create repos directory: %w", err)
 	}
 
+	// If token is provided and repository is private, embed it in the clone URL
+	authenticatedURL := cloneURL
+	if len(token) > 0 && token[0] != "" && isPrivate {
+		// Embed token in URL: https://x-access-token:TOKEN@github.com/owner/repo.git
+		authenticatedURL = s.embedTokenInURL(cloneURL, token[0])
+		log.Debug().Msg("Using authenticated clone URL for private repository")
+	}
+
 	// Clone with sparse checkout
 	gitCmd, err := getGitPath()
 	if err != nil {
 		return "", err
 	}
-	cmd := exec.Command(gitCmd, "clone", "--filter=blob:none", "--sparse", cloneURL, repoPath)
+	cmd := exec.Command(gitCmd, "clone", "--filter=blob:none", "--sparse", authenticatedURL, repoPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -76,6 +86,26 @@ func (s *CloneService) CloneRepository(cloneURL string, isPrivate bool) (string,
 	log.Info().Str("repo_path", repoPath).Msg("Repository cloned")
 
 	return repoPath, nil
+}
+
+// embedTokenInURL embeds a GitHub token in a clone URL
+func (s *CloneService) embedTokenInURL(cloneURL, token string) string {
+	// Handle different URL formats:
+	// https://github.com/owner/repo.git
+	// https://github.com/owner/repo
+	// git@github.com:owner/repo.git
+	
+	if strings.HasPrefix(cloneURL, "https://github.com/") {
+		// Replace https://github.com/ with https://x-access-token:TOKEN@github.com/
+		return strings.Replace(cloneURL, "https://github.com/", fmt.Sprintf("https://x-access-token:%s@github.com/", token), 1)
+	} else if strings.HasPrefix(cloneURL, "http://github.com/") {
+		// Handle http URLs (unlikely but possible)
+		return strings.Replace(cloneURL, "http://github.com/", fmt.Sprintf("http://x-access-token:%s@github.com/", token), 1)
+	}
+	
+	// If URL format is not recognized, return as-is
+	log.Warn().Str("clone_url", cloneURL).Msg("Unrecognized clone URL format, token not embedded")
+	return cloneURL
 }
 
 // CreateWorktree creates a git worktree for the review

@@ -412,22 +412,7 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 		}
 	}()
 
-	// Step 1: Clone repository (or use existing)
-	repoPath, err := wp.gitService.CloneRepository(job.Repo.CloneURL, false)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to clone repository")
-		return fmt.Errorf("failed to clone repository: %w", err)
-	}
-
-	// Step 2: Create worktree for the review
-	worktreePath, err = wp.gitService.CreateWorktree(repoPath, job.PR.HeadSHA, job.PR.HeadSHA)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create worktree")
-		return fmt.Errorf("failed to create worktree: %w", err)
-	}
-
-	// Step 3: Get repository from database
-	// We need to find the repository by full name
+	// Step 1: Get repository from database to check if it's private
 	org, err := wp.db.GetOrganizationByID(job.OrgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get organization")
@@ -436,7 +421,7 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 
 	repos, err := wp.db.GetRepositoriesByOrgID(org.ID)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to get repositories, using defaults")
+		logger.Warn().Err(err).Msg("Failed to get repositories, assuming private for safety")
 	}
 
 	var repo *types.Repository
@@ -447,7 +432,52 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 		}
 	}
 
-	// Step 4: Load repository config
+	// Step 2: Get GitHub token if needed for private repository
+	// Try to get token even if repo not in DB yet (new repo from webhook)
+	var githubToken string
+	isPrivate := repo != nil && repo.IsPrivate
+	// If repo not in DB, assume it might be private and try to get token
+	needsToken := isPrivate || (repo == nil && job.Platform == types.PlatformGitHub)
+	if job.Platform == types.PlatformGitHub && needsToken {
+		inst, err := wp.db.GetInstallationByOrgID(job.OrgID)
+		if err == nil && inst != nil {
+			token := inst.Token
+			// Refresh token if expired or missing
+			if wp.tokenService != nil {
+				needsRefresh := token == "" || inst.TokenExpires == nil || (inst.TokenExpires != nil && time.Until(*inst.TokenExpires) < 5*time.Minute)
+				if needsRefresh {
+					logger.Info().Int64("installation_id", inst.InstallationID).Msg("Refreshing GitHub token for clone")
+					newToken, newExpiresAt, err := wp.tokenService.GetInstallationTokenWithRefresh(
+						inst.InstallationID,
+						token,
+						inst.TokenExpires,
+					)
+					if err == nil {
+						token = newToken
+						// Update token in database
+						if updateErr := wp.db.UpdateInstallationToken(inst.InstallationID, newToken, newExpiresAt); updateErr != nil {
+							logger.Warn().Err(updateErr).Msg("Failed to update token in database")
+						}
+					} else {
+						logger.Warn().Err(err).Msg("Failed to refresh token, will try with existing token")
+					}
+				}
+			}
+			githubToken = token
+		}
+	}
+
+	// Step 3: Clone repository (or use existing) - pass token for private repos
+	repoPath, err := wp.gitService.CloneRepository(job.Repo.CloneURL, isPrivate || (repo == nil && job.Platform == types.PlatformGitHub), githubToken)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to clone repository")
+		return fmt.Errorf("failed to clone repository: %w", err)
+	}
+
+	// Step 4: Create worktree for the review
+	worktreePath, err = wp.gitService.CreateWorktree(repoPath, job.PR.HeadSHA, job.PR.HeadSHA)
+
+	// Step 5: Load repository config
 	configLoader := repoconfig.NewLoader()
 	var repoConfig *repoconfig.RepoConfig
 
