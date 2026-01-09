@@ -94,7 +94,7 @@ func (s *CloneService) embedTokenInURL(cloneURL, token string) string {
 	// https://github.com/owner/repo.git
 	// https://github.com/owner/repo
 	// git@github.com:owner/repo.git
-	
+
 	if strings.HasPrefix(cloneURL, "https://github.com/") {
 		// Replace https://github.com/ with https://x-access-token:TOKEN@github.com/
 		return strings.Replace(cloneURL, "https://github.com/", fmt.Sprintf("https://x-access-token:%s@github.com/", token), 1)
@@ -102,7 +102,7 @@ func (s *CloneService) embedTokenInURL(cloneURL, token string) string {
 		// Handle http URLs (unlikely but possible)
 		return strings.Replace(cloneURL, "http://github.com/", fmt.Sprintf("http://x-access-token:%s@github.com/", token), 1)
 	}
-	
+
 	// If URL format is not recognized, return as-is
 	log.Warn().Str("clone_url", cloneURL).Msg("Unrecognized clone URL format, token not embedded")
 	return cloneURL
