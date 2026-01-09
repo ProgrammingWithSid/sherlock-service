@@ -62,12 +62,25 @@ func (s *CloneService) CloneRepository(cloneURL string, isPrivate bool, token ..
 		return "", fmt.Errorf("failed to create repos directory: %w", err)
 	}
 
-	// If token is provided and repository is private, embed it in the clone URL
+	// If token is provided, embed it in the clone URL
+	// For GitHub, we use token if provided (works for both public and private repos)
 	authenticatedURL := cloneURL
-	if len(token) > 0 && token[0] != "" && isPrivate {
+	hasToken := len(token) > 0 && token[0] != ""
+	if hasToken {
 		// Embed token in URL: https://x-access-token:TOKEN@github.com/owner/repo.git
 		authenticatedURL = s.embedTokenInURL(cloneURL, token[0])
-		log.Debug().Msg("Using authenticated clone URL for private repository")
+		log.Info().
+			Bool("is_private", isPrivate).
+			Bool("has_token", hasToken).
+			Str("original_url", cloneURL).
+			Str("authenticated_url", authenticatedURL).
+			Msg("Using authenticated clone URL")
+	} else {
+		log.Info().
+			Bool("is_private", isPrivate).
+			Bool("has_token", hasToken).
+			Str("clone_url", cloneURL).
+			Msg("Cloning without authentication")
 	}
 
 	// Clone with sparse checkout

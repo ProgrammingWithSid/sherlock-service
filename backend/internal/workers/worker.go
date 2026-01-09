@@ -436,9 +436,9 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 	// Try to get token even if repo not in DB yet (new repo from webhook)
 	var githubToken string
 	isPrivate := repo != nil && repo.IsPrivate
-	// If repo not in DB, assume it might be private and try to get token
-	needsToken := isPrivate || (repo == nil && job.Platform == types.PlatformGitHub)
-	if job.Platform == types.PlatformGitHub && needsToken {
+	// For GitHub repos, always try to get token - it's needed for private repos
+	// and doesn't hurt for public ones (we'll only use it if isPrivate is true)
+	if job.Platform == types.PlatformGitHub {
 		inst, err := wp.db.GetInstallationByOrgID(job.OrgID)
 		if err == nil && inst != nil {
 			token := inst.Token
@@ -464,11 +464,31 @@ func (wp *WorkerPool) processReviewJob(ctx context.Context, job *types.ReviewJob
 				}
 			}
 			githubToken = token
+			logger.Info().
+				Bool("has_token", githubToken != "").
+				Bool("repo_in_db", repo != nil).
+				Bool("is_private", isPrivate).
+				Str("repo_full_name", job.Repo.FullName).
+				Msg("GitHub token retrieved for clone")
+		} else {
+			logger.Warn().
+				Err(err).
+				Str("org_id", job.OrgID).
+				Msg("Failed to get GitHub installation for clone")
 		}
 	}
 
 	// Step 3: Clone repository (or use existing) - pass token for private repos
-	repoPath, err = wp.gitService.CloneRepository(job.Repo.CloneURL, isPrivate || (repo == nil && job.Platform == types.PlatformGitHub), githubToken)
+	// If repo not in DB, assume it might be private and use token
+	shouldUseToken := isPrivate || (repo == nil && job.Platform == types.PlatformGitHub)
+	logger.Info().
+		Bool("should_use_token", shouldUseToken).
+		Bool("is_private", isPrivate).
+		Bool("repo_in_db", repo != nil).
+		Bool("has_token", githubToken != "").
+		Str("clone_url", job.Repo.CloneURL).
+		Msg("Cloning repository")
+	repoPath, err = wp.gitService.CloneRepository(job.Repo.CloneURL, shouldUseToken, githubToken)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to clone repository")
 		return fmt.Errorf("failed to clone repository: %w", err)
