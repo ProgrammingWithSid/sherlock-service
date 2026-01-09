@@ -326,29 +326,42 @@ func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}, r *ht
 	// Get organization from GitHub App installation
 	var org *types.Organization
 	var err error
+	var installationID int64
+	var foundInstallation bool
 
-	// Check if this is a GitHub App installation webhook
+	// Check if this is a GitHub App installation webhook (in payload)
 	if installationData, ok := payload["installation"].(map[string]interface{}); ok {
-		installationID, ok := installationData["id"].(float64)
+		installationIDFloat, ok := installationData["id"].(float64)
 		if !ok {
 			return fmt.Errorf("invalid installation ID")
 		}
+		installationID = int64(installationIDFloat)
+		foundInstallation = true
+	} else {
+		// GitHub App installation not in payload - try to find via repository or other means
+		log.Warn().Str("repo", repoFullName).Msg("GitHub App installation not found in webhook payload, trying to find via repository")
 
+		// Try to get installation ID from webhook headers (some GitHub App webhooks include it)
+		// Note: GitHub doesn't send installation ID in headers, but we can try to find it via repository
+	}
+
+	// If we have an installation ID from payload, use it
+	if foundInstallation {
 		// Get or create organization from installation
-		inst, err := h.db.GetInstallationByID(int64(installationID))
+		inst, err := h.db.GetInstallationByID(installationID)
 		if err != nil {
 			// Installation not found - create organization and installation
 			org, createErr := h.db.CreateOrganization(
-				fmt.Sprintf("Organization %d", int64(installationID)),
-				fmt.Sprintf("org-%d", int64(installationID)),
+				fmt.Sprintf("Organization %d", installationID),
+				fmt.Sprintf("org-%d", installationID),
 			)
 			if createErr != nil {
 				return fmt.Errorf("failed to create organization: %w", createErr)
 			}
 
 			// Create installation record (token would be fetched separately)
-			_ = h.db.CreateOrUpdateInstallation(org.ID, int64(installationID), "", nil)
-			inst, err = h.db.GetInstallationByID(int64(installationID))
+			_ = h.db.CreateOrUpdateInstallation(org.ID, installationID, "", nil)
+			inst, err = h.db.GetInstallationByID(installationID)
 			if err != nil {
 				return fmt.Errorf("failed to get installation: %w", err)
 			}
@@ -359,19 +372,32 @@ func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}, r *ht
 			return fmt.Errorf("organization not found: %w", err)
 		}
 	} else {
-		// GitHub App installation not found in payload - try to find via repository
-		log.Warn().Str("repo", repoFullName).Msg("GitHub App installation not found in webhook payload, trying to find via repository")
-		
-		// Try to find repository in our database
-		repo, err := h.db.GetRepositoryByFullName(repoFullName)
-		if err != nil {
-			return fmt.Errorf("repository %s not found. Please connect it first or ensure GitHub App is installed", repoFullName)
-		}
+		// No installation in payload - try to find repository first
+		repo, repoErr := h.db.GetRepositoryByFullName(repoFullName)
+		if repoErr == nil && repo != nil {
+			// Repository exists - get org and installation from it
+			if !repo.IsActive {
+				log.Info().Str("repo", repoFullName).Msg("Repository is paused, skipping review")
+				return nil // Silently skip paused repositories
+			}
 
-		// Get organization from repository
-		org, err = h.db.GetOrganizationByID(repo.OrgID)
-		if err != nil {
-			return fmt.Errorf("organization not found for repository: %w", err)
+			org, err = h.db.GetOrganizationByID(repo.OrgID)
+			if err != nil {
+				return fmt.Errorf("organization not found: %w", err)
+			}
+
+			// Try to get installation for this org
+			inst, instErr := h.db.GetInstallationByOrgID(org.ID)
+			if instErr == nil && inst != nil {
+				// Found installation via repository -> org -> installation
+				foundInstallation = true
+				installationID = inst.InstallationID
+			}
+		} else {
+			// Repository doesn't exist - this is likely a GitHub App webhook for a new repository
+			// Without an installation ID, we can't create the repository automatically
+			// Return a helpful error message
+			return fmt.Errorf("repository %s not found. Please connect it first or ensure GitHub App is installed", repoFullName)
 		}
 
 		// Verify organization has an installation

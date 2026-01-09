@@ -1,4 +1,4 @@
-.PHONY: build run dev test clean deps lint install build-all dev-all deploy deploy-ecr deploy-build setup-ecr-login cleanup-ecr cleanup-server
+.PHONY: build run dev test clean deps lint install build-all dev-all
 
 # Backend targets
 build:
@@ -69,15 +69,6 @@ lint-all: lint frontend-lint
 
 .DEFAULT_GOAL := build
 
-# ECR Configuration
-AWS_REGION ?= ap-south-1
-ECR_REPOSITORY_SERVER ?= sherlock-service/server
-ECR_REPOSITORY_WORKER ?= sherlock-service/worker
-SSH_KEY ?= ~/Desktop/sherlock-service.pem
-SSH_USER ?= ubuntu
-SSH_HOST ?= 13.233.117.33
-
-# Deployment helpers
 # Admin utilities
 create-admin:
 	@if [ -z "$(EMAIL)" ] || [ -z "$(PASSWORD)" ] || [ -z "$(NAME)" ] || [ -z "$(DB_URL)" ]; then \
@@ -85,65 +76,3 @@ create-admin:
 		exit 1; \
 	fi
 	cd backend && go run ./cmd/create-admin/main.go -email $(EMAIL) -password $(PASSWORD) -name "$(NAME)" -db "$(DB_URL)"
-
-# ECR-based deployment (default - uses pre-built images from ECR)
-deploy: deploy-ecr
-
-deploy-ecr:
-	@echo "🚀 Deploying using ECR images..."
-	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
-		git fetch origin && git reset --hard origin/main && \
-		AWS_REGION=$(AWS_REGION) bash scripts/deploy-ecr.sh"
-
-# Legacy build-on-EC2 deployment (fallback)
-deploy-build:
-	@echo "🧹 Performing deep cleanup and fresh build..."
-	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
-		git fetch origin && git reset --hard origin/main && \
-		cd docker && \
-		docker-compose down && \
-		docker system prune -af --volumes && \
-		docker builder prune -af && \
-		rm -rf /tmp/go-build* && \
-		docker-compose -f docker-compose.yml -f docker-compose.build.yml build --no-cache && \
-		docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d"
-
-# Setup AWS credentials on EC2
-setup-aws:
-	@echo "🔐 Setting up AWS credentials on EC2..."
-	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
-		git fetch origin && git reset --hard origin/main && \
-		bash scripts/setup-aws-credentials.sh"
-
-# Setup ECR login on EC2 (one-time setup, requires AWS credentials)
-setup-ecr-login:
-	@echo "🔐 Setting up ECR login on EC2..."
-	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
-		git fetch origin && git reset --hard origin/main && \
-		bash scripts/ecr-login.sh"
-
-# Check ECR repository status
-check-ecr:
-	@echo "🔍 Checking ECR repositories..."
-	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "cd sherlock-service && \
-		git fetch origin && git reset --hard origin/main && \
-		AWS_REGION=$(AWS_REGION) bash -c ' \
-		aws ecr describe-repositories --repository-names $(ECR_REPOSITORY_SERVER) --region $(AWS_REGION) 2>/dev/null && echo \"✅ Server repository exists\" || echo \"❌ Server repository not found\" && \
-		aws ecr describe-repositories --repository-names $(ECR_REPOSITORY_WORKER) --region $(AWS_REGION) 2>/dev/null && echo \"✅ Worker repository exists\" || echo \"❌ Worker repository not found\" \
-		'"
-
-# Manual ECR cleanup trigger
-cleanup-ecr:
-	@echo "🧹 Triggering ECR cleanup workflow..."
-	@echo "   This will clean up old ECR images (keeps last 10)"
-	gh workflow run ecr-cleanup.yml || echo "⚠️  GitHub CLI not installed or not authenticated. Run manually from GitHub Actions."
-
-cleanup-server:
-	@echo "🧹 Cleaning up Docker resources on server..."
-	ssh -i $(SSH_KEY) $(SSH_USER)@$(SSH_HOST) "bash sherlock-service/scripts/ec2-cleanup.sh || (docker system prune -af --volumes && docker builder prune -af && rm -rf /tmp/go-build* && df -h)"
-
-scp:
-	scp -i ~/Desktop/sherlock-service.pem \
-	  frontend/package.json \
-	  docker/Dockerfile \
-	  ubuntu@13.233.117.33:~/sherlock-service/

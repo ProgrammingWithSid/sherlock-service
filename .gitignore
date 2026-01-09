@@ -97,3 +97,5 @@ docs/
 *.sh
 *.md
 backend/server
+
+*.json
