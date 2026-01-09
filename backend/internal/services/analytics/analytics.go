@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sherlock/service/internal/types"
 )
 
 
