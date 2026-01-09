@@ -11,6 +11,33 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var gitPath string
+
+func init() {
+	// Find git executable at startup
+	var err error
+	gitPath, err = exec.LookPath("git")
+	if err != nil {
+		log.Warn().Err(err).Msg("git executable not found in PATH - git operations will fail")
+		gitPath = "" // Will be checked again on first use
+	} else {
+		log.Info().Str("git_path", gitPath).Msg("Found git executable")
+	}
+}
+
+// getGitPath returns the path to git executable, checking PATH if needed
+func getGitPath() (string, error) {
+	if gitPath != "" {
+		return gitPath, nil
+	}
+	path, err := exec.LookPath("git")
+	if err != nil {
+		return "", fmt.Errorf("git executable not found in PATH: %w", err)
+	}
+	gitPath = path
+	return gitPath, nil
+}
+
 type CloneService struct {
 	reposPath string
 	maxAge    time.Duration
@@ -34,7 +61,11 @@ func (s *CloneService) CloneRepository(cloneURL string, isPrivate bool) (string,
 	}
 
 	// Clone with sparse checkout
-	cmd := exec.Command("git", "clone", "--filter=blob:none", "--sparse", cloneURL, repoPath)
+	gitCmd, err := getGitPath()
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(gitCmd, "clone", "--filter=blob:none", "--sparse", cloneURL, repoPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -59,7 +90,11 @@ func (s *CloneService) CreateWorktree(repoPath string, branch string, commitSHA 
 	}
 
 	// Create worktree
-	cmd := exec.Command("git", "-C", repoPath, "worktree", "add", worktreePath, commitSHA)
+	gitCmd, err := getGitPath()
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(gitCmd, "-C", repoPath, "worktree", "add", worktreePath, commitSHA)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -103,13 +138,18 @@ func (s *CloneService) RemoveWorktree(worktreePath string) error {
 
 	// If we found a git dir, try to use git worktree remove
 	if gitDir != "" {
-		cmd := exec.Command("git", "-C", gitDir, "worktree", "remove", worktreePath, "--force")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		gitCmd, err := getGitPath()
+		if err != nil {
+			log.Warn().Err(err).Msg("git executable not found, falling back to manual cleanup")
+		} else {
+			cmd := exec.Command(gitCmd, "-C", gitDir, "worktree", "remove", worktreePath, "--force")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
 
-		if err := cmd.Run(); err == nil {
-			log.Info().Str("worktree_path", worktreePath).Msg("Worktree removed")
-			return nil
+			if err := cmd.Run(); err == nil {
+				log.Info().Str("worktree_path", worktreePath).Msg("Worktree removed")
+				return nil
+			}
 		}
 	}
 
@@ -125,7 +165,11 @@ func (s *CloneService) RemoveWorktree(worktreePath string) error {
 
 // GetChangedFiles returns the list of changed files between two branches
 func (s *CloneService) GetChangedFiles(repoPath string, baseBranch string, headBranch string) ([]string, error) {
-	cmd := exec.Command("git", "-C", repoPath, "diff", "--name-only", fmt.Sprintf("%s...%s", baseBranch, headBranch))
+	gitCmd, err := getGitPath()
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(gitCmd, "-C", repoPath, "diff", "--name-only", fmt.Sprintf("%s...%s", baseBranch, headBranch))
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changed files: %w", err)

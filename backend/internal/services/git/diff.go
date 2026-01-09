@@ -50,7 +50,11 @@ func (s *CloneService) GetFileDiff(repoPath string, baseBranch string, headBranc
 	}
 
 	// Get diff output
-	cmd := exec.Command("git", "-C", repoPath, "diff", "--unified=0", fmt.Sprintf("%s...%s", baseBranch, headBranch), "--", filePath)
+	gitCmd, err := getGitPath()
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(gitCmd, "-C", repoPath, "diff", "--unified=0", fmt.Sprintf("%s...%s", baseBranch, headBranch), "--", filePath)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff: %w", err)
@@ -95,13 +99,17 @@ func (s *CloneService) GetChangedLines(repoPath string, baseBranch string, headB
 
 // getFileStatus determines if a file was added, modified, or deleted
 func (s *CloneService) getFileStatus(repoPath string, baseBranch string, headBranch string, filePath string) (string, error) {
+	gitCmd, err := getGitPath()
+	if err != nil {
+		return "", err
+	}
 	// Check if file exists in base branch
-	cmd := exec.Command("git", "-C", repoPath, "cat-file", "-e", fmt.Sprintf("%s:%s", baseBranch, filePath))
-	err := cmd.Run()
+	cmd := exec.Command(gitCmd, "-C", repoPath, "cat-file", "-e", fmt.Sprintf("%s:%s", baseBranch, filePath))
+	err = cmd.Run()
 	existsInBase := err == nil
 
 	// Check if file exists in head branch
-	cmd = exec.Command("git", "-C", repoPath, "cat-file", "-e", fmt.Sprintf("%s:%s", headBranch, filePath))
+	cmd = exec.Command(gitCmd, "-C", repoPath, "cat-file", "-e", fmt.Sprintf("%s:%s", headBranch, filePath))
 	err = cmd.Run()
 	existsInHead := err == nil
 
@@ -194,7 +202,11 @@ func parseDiffOutput(output string) ([]Hunk, int, int) {
 
 // GetDiffStats returns statistics about changes between branches
 func (s *CloneService) GetDiffStats(repoPath string, baseBranch string, headBranch string) (int, int, error) {
-	cmd := exec.Command("git", "-C", repoPath, "diff", "--shortstat", fmt.Sprintf("%s...%s", baseBranch, headBranch))
+	gitCmd, err := getGitPath()
+	if err != nil {
+		return 0, 0, err
+	}
+	cmd := exec.Command(gitCmd, "-C", repoPath, "diff", "--shortstat", fmt.Sprintf("%s...%s", baseBranch, headBranch))
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get diff stats: %w", err)
