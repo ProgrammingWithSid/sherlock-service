@@ -391,26 +391,17 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult, skip
 			for _, comment := range skippedFileNotFound {
 				severityEmoji := s.getSeverityEmoji(comment.Severity)
 				// Format: 🔴 ERROR | security | screens/restaurant/menu/uploadMenu/index.tsx:140
-				parts = append(parts, fmt.Sprintf("### %s **%s** | `%s` | `%s:%d`", 
+				parts = append(parts, fmt.Sprintf("- %s **%s** | `%s` | `%s:%d`", 
 					severityEmoji, 
 					strings.ToUpper(string(comment.Severity)), 
 					comment.Category,
 					comment.File, 
 					comment.Line))
-				parts = append(parts, "")
 				// Add the message/summary of the issue
 				if comment.Message != "" {
-					parts = append(parts, comment.Message)
-					parts = append(parts, "")
+					parts = append(parts, fmt.Sprintf("  - %s", comment.Message))
 				}
-				// Add suggested fix if available
-				if comment.Fix != "" {
-					parts = append(parts, "**Suggested fix:**")
-					parts = append(parts, "```")
-					parts = append(parts, comment.Fix)
-					parts = append(parts, "```")
-					parts = append(parts, "")
-				}
+				parts = append(parts, "")
 			}
 			parts = append(parts, "</details>")
 			parts = append(parts, "")
@@ -426,26 +417,17 @@ func (s *GitHubCommentService) createReviewBody(result *types.ReviewResult, skip
 			for _, comment := range skippedInvalidLine {
 				severityEmoji := s.getSeverityEmoji(comment.Severity)
 				// Format: 🔴 ERROR | security | screens/restaurant/menu/uploadMenu/index.tsx:140
-				parts = append(parts, fmt.Sprintf("### %s **%s** | `%s` | `%s:%d`", 
+				parts = append(parts, fmt.Sprintf("- %s **%s** | `%s` | `%s:%d`", 
 					severityEmoji, 
 					strings.ToUpper(string(comment.Severity)), 
 					comment.Category,
 					comment.File, 
 					comment.Line))
-				parts = append(parts, "")
 				// Add the message/summary of the issue
 				if comment.Message != "" {
-					parts = append(parts, comment.Message)
-					parts = append(parts, "")
+					parts = append(parts, fmt.Sprintf("  - %s", comment.Message))
 				}
-				// Add suggested fix if available
-				if comment.Fix != "" {
-					parts = append(parts, "**Suggested fix:**")
-					parts = append(parts, "```")
-					parts = append(parts, comment.Fix)
-					parts = append(parts, "```")
-					parts = append(parts, "")
-				}
+				parts = append(parts, "")
 			}
 			parts = append(parts, "</details>")
 			parts = append(parts, "")
