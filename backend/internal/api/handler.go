@@ -569,7 +569,8 @@ func (h *Handler) ConnectRepository(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if repository already exists
-	repo, err := h.db.GetRepositoryByFullName(orgID, fmt.Sprintf("%s/%s", body.Owner, body.Repo))
+	fullName := fmt.Sprintf("%s/%s", body.Owner, body.Repo)
+	repo, err := h.db.GetRepositoryByFullName(fullName)
 	if err != nil && err.Error() != "repository not found" {
 		render.Status(r, http.StatusInternalServerError)
 		render.JSON(w, r, map[string]string{"error": err.Error()})
@@ -577,11 +578,15 @@ func (h *Handler) ConnectRepository(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if repo != nil {
+		// Verify the repository belongs to the organization
+		if repo.OrgID != orgID {
+			render.Status(r, http.StatusForbidden)
+			render.JSON(w, r, map[string]string{"error": "Repository belongs to a different organization"})
+			return
+		}
 		render.JSON(w, r, repo)
 		return
 	}
-
-	fullName := fmt.Sprintf("%s/%s", body.Owner, body.Repo)
 
 	// Create new repository
 	repo = &types.Repository{
@@ -626,7 +631,7 @@ func (h *Handler) SetRepositoryActive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify ownership/existence within org
-	repo, err := h.db.GetRepository(id) // Assuming this exists or using GetRepositoriesByOrgID
+	repo, err := h.db.GetRepositoryByID(id)
 	if err != nil {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, map[string]string{"error": "Repository not found"})
