@@ -490,6 +490,20 @@ func (h *WebhookHandler) handlePullRequest(payload map[string]interface{}, r *ht
 		if err := h.db.CreateRepository(repo); err != nil {
 			return fmt.Errorf("failed to create repository: %w", err)
 		}
+	} else {
+		// Check if review already exists for this repo, PR, and SHA
+		existingReview, err := h.db.GetReviewByPRAndSHA(repo.ID, prNumber, headSHA)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to check for existing review")
+		} else if existingReview != nil {
+			log.Info().
+				Str("repo", repoFullName).
+				Int("pr", prNumber).
+				Str("sha", headSHA).
+				Str("review_id", existingReview.ID).
+				Msg("Review already exists for this commit, skipping duplicate")
+			return nil
+		}
 	}
 
 	// Create review record

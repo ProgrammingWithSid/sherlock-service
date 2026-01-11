@@ -35,6 +35,40 @@ func (db *DB) CreateReview(review *types.Review) error {
 	return nil
 }
 
+func (db *DB) GetReviewByPRAndSHA(repoID string, prNumber int, headSHA string) (*types.Review, error) {
+	query := `
+		SELECT id, org_id, repo_id, pr_number, head_sha, status, result,
+		       comments_posted, duration_ms, ai_provider, created_at, completed_at
+		FROM reviews
+		WHERE repo_id = $1 AND pr_number = $2 AND head_sha = $3
+	`
+
+	review := &types.Review{}
+	var result sql.NullString
+	var completedAt sql.NullTime
+	err := db.conn.QueryRow(query, repoID, prNumber, headSHA).Scan(
+		&review.ID, &review.OrgID, &review.RepoID, &review.PRNumber,
+		&review.HeadSHA, &review.Status, &result,
+		&review.CommentsPosted, &review.DurationMs, &review.AIProvider,
+		&review.CreatedAt, &completedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get review by PR and SHA: %w", err)
+	}
+
+	if result.Valid {
+		review.Result = result.String
+	}
+	if completedAt.Valid {
+		review.CompletedAt = &completedAt.Time
+	}
+
+	return review, nil
+}
+
 func (db *DB) GetReviewByID(id string) (*types.Review, error) {
 	query := `
 		SELECT id, org_id, repo_id, pr_number, head_sha, status, result,

@@ -109,7 +109,8 @@ func (db *DB) migrate() error {
 			duration_ms INTEGER,
 			ai_provider VARCHAR(50),
 			created_at TIMESTAMP DEFAULT NOW(),
-			completed_at TIMESTAMP
+			completed_at TIMESTAMP,
+			UNIQUE(repo_id, pr_number, head_sha)
 		)`,
 		`CREATE TABLE IF NOT EXISTS usage_logs (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
